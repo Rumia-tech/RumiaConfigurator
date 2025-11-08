@@ -2,11 +2,7 @@ from PIL import Image, ImageTk
 import os
 import sys
 import customtkinter as ctk
-import subprocess
-import re
-import datetime
 import csv
-import threading
 import queue
 import matplotlib
 matplotlib.use('TkAgg')
@@ -14,91 +10,15 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
-from scipy.signal import butter, lfilter
-import pkgutil
-import traceback
-import platform
 
-# Import python-can if available
-try:
-    import can
-    try:
-        interfaces_list = []
-        import can.interfaces as ci
-        interfaces_list = [m.name for m in pkgutil.iter_modules(ci.__path__)]
-    except Exception:
-        interfaces_list = []
-    can_diagnostics = (
-        f"python-can present, version={getattr(can, '__version__', None)}, "
-        f"available interfaces={interfaces_list}"
-    )
-except Exception as e:
-    can = None
-    can_diagnostics = f"python-can import failed: {e}; traceback: {traceback.format_exc()}"
-
-def resource_path(relative_path):
-    """
-    Return path to resource, works for development and PyInstaller bundles.
-    """
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.join(os.path.abspath(os.path.dirname(__file__)), relative_path)
-
-def hex_to_signed_decimal(hex_string):
-    """Convert a 2-byte hexadecimal string to a signed decimal integer."""
-    value = int(hex_string, 16)
-    if value & (1 << 15):
-        return value - (1 << 16)
-    return value
-
-def decimal_to_hex_msb_lsb(decimal_value):
-    """Convert a decimal value (1-2000) to MSB and LSB hex string pairs."""
-    if not 1 <= decimal_value <= 2000:
-        raise ValueError("Decimal value must be between 1 and 2000.")
-    hex_value = hex(decimal_value)[2:].zfill(4).upper()
-    lsb = hex_value[:2]
-    msb = hex_value[2:]
-    return msb, lsb
-
-def elabora_frame_can(line):
-    """Parse a single candump output line and extract timestamp, CAN ID and x,y,z values."""
-    match = re.search(r'can0\s+([0-9A-F]+)\s+\[\d+\]\s+([0-9A-F ]+)', line)
-    if match:
-        can_id, data_str = match.groups()
-        if can_id.upper() not in ("29D", "71D"):
-            hex_numbers = data_str.split()
-            if len(hex_numbers) >= 6:
-                try:
-                    hex_ffc3 = hex_numbers[1] + hex_numbers[0].upper()
-                    hex_014b = hex_numbers[3] + hex_numbers[2].upper()
-                    hex_fc55 = hex_numbers[5] + hex_numbers[4].upper()
-                    x = hex_to_signed_decimal(hex_ffc3) / 1000
-                    y = hex_to_signed_decimal(hex_014b) / 1000
-                    z = hex_to_signed_decimal(hex_fc55) / 1000
-                    timestamp = datetime.datetime.now()
-                    return timestamp, can_id, x, y, z
-                except ValueError:
-                    return None, None, None, None, None
-    return None, None, None, None, None
-
-# Filter helper functions
-def butter_lowpass_filter(data, cutoff, fs, order=5):
-    nyquist = 0.5 * fs
-    if cutoff >= nyquist or nyquist == 0:
-        return data
-    normal_cutoff = cutoff / nyquist
-    b, a = butter(order, normal_cutoff, btype='low', analog=False)
-    y = lfilter(b, a, data)
-    return y
-
-def butter_highpass_filter(data, cutoff, fs, order=5):
-    nyquist = 0.5 * fs
-    if cutoff >= nyquist or nyquist == 0:
-        return data
-    normal_cutoff = cutoff / nyquist
-    b, a = butter(order, normal_cutoff, btype='high', analog=False)
-    y = lfilter(b, a, data)
-    return y
+from utils import (
+    resource_path,
+    decimal_to_hex_msb_lsb,
+    butter_lowpass_filter,
+    butter_highpass_filter,
+)
+from plotting import setup_plot_figure, finalize_layout
+from can_interface import CanController
 
 
 class CanInterfaceApp(ctk.CTk):
@@ -113,8 +33,7 @@ class CanInterfaceApp(ctk.CTk):
         self.grid_columnconfigure(3, weight=3)
         self.grid_rowconfigure(1, weight=1)
 
-        self.can_process = None
-        self.can_bus = None
+        self.can_controller = CanController(log_callback=self.log_message)
         self.data_points = []
         self.acquisition_active = False
         self.data_queue = queue.Queue()
@@ -198,18 +117,21 @@ class CanInterfaceApp(ctk.CTk):
         self.plot_frame.grid_rowconfigure(0, weight=1)
         self.plot_frame.grid_columnconfigure(0, weight=1)
 
-        self.fig, self.ax = plt.subplots(facecolor='#2B2B2B')
+        # Use plotting helpers; adjust colors for dark theme
+        self.fig, self.ax = setup_plot_figure(figsize=(8, 6))
+        try:
+            self.fig.set_facecolor('#2B2B2B')
+        except Exception:
+            pass
         self.ax.set_facecolor('#2B2B2B')
         self.ax.tick_params(axis='x', colors='white')
         self.ax.tick_params(axis='y', colors='white')
-        self.ax.spines['bottom'].set_color('white')
-        self.ax.spines['top'].set_color('white')
-        self.ax.spines['left'].set_color('white')
-        self.ax.spines['right'].set_color('white')
+        for spine in ('bottom', 'top', 'left', 'right'):
+            self.ax.spines[spine].set_color('white')
         self.ax.xaxis.label.set_color('white')
         self.ax.yaxis.label.set_color('white')
         self.ax.title.set_color('white')
-        
+
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.plot_frame)
         self.canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
 
@@ -229,116 +151,14 @@ class CanInterfaceApp(ctk.CTk):
             self.entry_csv_filename.grid_remove()
 
     def setup_can_interface_gui(self):
-        """
-        Cross-platform setup: prefer python-can (slcan) on Windows.
-        Fallback: use subprocess commands (slcand/ifconfig/can-utils) when python-can is not available.
-        Default backend is slcan and default channel is COM3 (overridable via environment variables).
-        """
-        tty_device = os.environ.get('CAN_TTY_DEVICE', '/dev/ttyACM0')
-        can_interface = os.environ.get('CAN_INTERFACE', 'can0')
-        can_backend = os.environ.get('CAN_BACKEND', 'slcan')
-        can_channel = os.environ.get('CAN_CHANNEL', 'COM3')
-
-        self.log_message(f"CAN configuration: backend={can_backend} channel={can_channel} tty={tty_device}")
-
-        if can is None:
-            self.log_message("python-can not available: using system commands (Linux only).")
-            try:
-                process_slcand = subprocess.run(['sudo', 'slcand', '-o', '-c', '-s8', tty_device, can_interface], capture_output=True, text=True)
-                self.log_message(process_slcand.stdout.strip() or "slcand executed")
-                if process_slcand.stderr:
-                    self.log_message(f"slcand STDERR: {process_slcand.stderr.strip()}")
-                process_slcand.check_returncode()
-
-                process_ifconfig = subprocess.run(['sudo', 'ifconfig', can_interface, 'up'], capture_output=True, text=True)
-                self.log_message(process_ifconfig.stdout.strip() or "ifconfig executed")
-                if process_ifconfig.stderr:
-                    self.log_message(f"ifconfig STDERR: {process_ifconfig.stderr.strip()}")
-                process_ifconfig.check_returncode()
-
-                self.log_message("CAN interface configured successfully (subprocess).")
-            except subprocess.CalledProcessError as e:
-                self.log_message(f"Error configuring CAN interface: {e}")
-                try:
-                    self.log_message(f"Error details: {e.stderr.strip()}")
-                except Exception:
-                    pass
-                self.button_start.configure(state="disabled")
-            except FileNotFoundError:
-                self.log_message("Error: slcand or ifconfig not found. Ensure can-utils is installed and commands are in PATH.")
-                self.button_start.configure(state="disabled")
-            return
-
-        try:
-            if can_backend.lower() == 'slcan':
-                try:
-                    self.can_bus = can.Bus(bustype='slcan', channel=can_channel, bitrate=1000000)
-                    self.log_message(f"Bus created: bustype='slcan' channel={can_channel}")
-                except Exception as e:
-                    self.log_message(f"Failed to create slcan bus: {e}. Trying virtual fallback.")
-                    try:
-                        self.can_bus = can.Bus(bustype='virtual', channel='vcan0')
-                        self.log_message("Virtual bus created as fallback.")
-                    except Exception as e2:
-                        self.log_message(f"Error creating virtual bus: {e2}")
-                        self.button_start.configure(state="disabled")
-            elif can_backend.lower() == 'virtual':
-                self.can_bus = can.Bus(bustype='virtual', channel='vcan0')
-                self.log_message("Using virtual bus.")
-            elif can_backend.lower() == 'kvaser':
-                try:
-                    self.can_bus = can.Bus(bustype='kvaser', channel=int(can_channel))
-                    self.log_message("Using kvaser backend.")
-                except Exception as e:
-                    self.log_message(f"Error creating kvaser bus: {e}")
-                    self.button_start.configure(state="disabled")
-            elif can_backend.lower() == 'pcan':
-                try:
-                    self.can_bus = can.Bus(bustype='pcan', channel=int(can_channel))
-                    self.log_message("Using pcan backend.")
-                except Exception as e:
-                    self.log_message(f"Error creating pcan bus: {e}")
-                    self.button_start.configure(state="disabled")
-            else:
-                try:
-                    self.can_bus = can.Bus(bustype='slcan', channel=can_channel, bitrate=500000)
-                    self.log_message(f"Bus created (fallback slcan): channel={can_channel}")
-                except Exception:
-                    self.can_bus = can.Bus(bustype='virtual', channel='vcan0')
-                    self.log_message("Using virtual bus (fallback).")
-        except Exception as e:
-            self.log_message(f"Error creating python-can bus: {e}")
+        """Setup CAN interface using CanController."""
+        success = self.can_controller.setup_bus()
+        if not success:
             self.button_start.configure(state="disabled")
 
     def send_can_message_gui(self, can_interface, can_id, data_string):
-        """
-        Send CAN message: use python-can if available, otherwise fallback to cansend (Linux).
-        can_id is expected as a hex string and data_string as a continuous hex bytes string.
-        """
-        if getattr(self, 'can_bus', None) is not None and can is not None:
-            try:
-                data_bytes = bytes.fromhex(data_string)
-                msg = can.Message(arbitration_id=int(can_id, 16), data=data_bytes, is_extended_id=False)
-                self.can_bus.send(msg)
-                self.log_message(f"CAN message sent (python-can): {can_id}#{data_string}")
-            except Exception as e:
-                self.log_message(f"Error sending CAN (python-can): {e}")
-        else:
-            try:
-                process_cansend = subprocess.run(['cansend', can_interface, f'{can_id}#{data_string}'], capture_output=True, text=True)
-                self.log_message(process_cansend.stdout.strip() or "cansend executed")
-                if process_cansend.stderr:
-                    self.log_message(f"cansend STDERR: {process_cansend.stderr.strip()}")
-                process_cansend.check_returncode()
-                self.log_message(f"CAN message sent: {can_interface} {can_id}#{data_string}")
-            except subprocess.CalledProcessError as e:
-                self.log_message(f"Error sending CAN message: {e}")
-                try:
-                    self.log_message(f"Error details: {e.stderr.strip()}")
-                except Exception:
-                    pass
-            except FileNotFoundError:
-                self.log_message("Error: cansend not found. Ensure can-utils is installed and cansend is in PATH.")
+        """Send CAN message via CanController."""
+        self.can_controller.send_message(can_interface, can_id, data_string)
 
     def start_acquisition(self):
         if self.acquisition_active:
@@ -378,65 +198,17 @@ class CanInterfaceApp(ctk.CTk):
         self.button_stop.configure(state="normal")
         self.log_message("Starting acquisition and real-time CAN data processing...")
 
-        self.can_thread = threading.Thread(target=self._run_candump)
-        self.can_thread.daemon = True
-        self.can_thread.start()
+        # Start CAN reader using CanController
+        def data_received(timestamp, can_id, x, y, z):
+            self.data_queue.put((timestamp, can_id, x, y, z))
+        
+        def should_stop():
+            return not self.acquisition_active
+        
+        self.can_controller.start_reader(data_received, should_stop)
 
         # Start the periodic plot update cycle
         self.update_plot()
-
-    def _run_candump(self):
-        """
-        Thread for reading CAN messages.
-        Use python-can self.can_bus.recv() when available; otherwise fallback to candump subprocess.
-        Puts tuples (timestamp, can_id, x, y, z) into the data queue.
-        """
-        try:
-            if getattr(self, 'can_bus', None) is not None and can is not None:
-                self.log_message("Reading CAN via python-can.")
-                while self.acquisition_active:
-                    try:
-                        msg = self.can_bus.recv(timeout=1.0)
-                    except Exception as e:
-                        self.log_message(f"python-can recv error: {e}")
-                        break
-                    if msg is None:
-                        continue
-                    try:
-                        hex_bytes = ' '.join(f"{b:02X}" for b in msg.data)
-                        line = f"can0 {msg.arbitration_id:X} [{len(msg.data)}] {hex_bytes}"
-                        timestamp, can_id, x, y, z = elabora_frame_can(line)
-                        if timestamp:
-                            self.data_queue.put((timestamp, can_id, x, y, z))
-                    except Exception as e:
-                        self.log_message(f"Error parsing python-can message: {e}")
-                self.log_message("python-can CAN thread terminated.")
-            else:
-                self.log_message("Reading CAN via candump (subprocess).")
-                try:
-                    self.can_process = subprocess.Popen(['candump', 'can0'], stdout=subprocess.PIPE, text=True, bufsize=1)
-                    for line in iter(self.can_process.stdout.readline, ''):
-                        if not self.acquisition_active:
-                            break
-                        line = line.strip()
-                        if line:
-                            timestamp, can_id, x, y, z = elabora_frame_can(line)
-                            if timestamp:
-                                self.data_queue.put((timestamp, can_id, x, y, z))
-                    if self.can_process and self.can_process.stdout:
-                        self.can_process.stdout.close()
-                        self.can_process.wait()
-                except FileNotFoundError:
-                    self.log_message("Error: candump not found.")
-                except Exception as e:
-                    self.log_message(f"Error in candump thread: {e}")
-        except Exception as e:
-            self.log_message(f"Error in CAN thread: {e}")
-
-        self.acquisition_active = False
-        self.after(0, self.update_buttons_state)
-        self.log_message("candump thread terminated.")
-        
 
     def process_data_queue(self):
         while not self.data_queue.empty():
@@ -452,13 +224,8 @@ class CanInterfaceApp(ctk.CTk):
             if self.update_plot_id:
                 self.after_cancel(self.update_plot_id)
                 self.update_plot_id = None
-            if self.can_process and self.can_process.poll() is None:
-                try:
-                    self.can_process.terminate()
-                    self.can_process.wait()
-                    self.log_message("candump process terminated.")
-                except Exception as e:
-                    self.log_message(f"Error terminating candump process: {e}")
+            # Stop CAN reader
+            self.can_controller.stop_reader()
         else:
             self.log_message("No acquisition in progress to stop.")
 
