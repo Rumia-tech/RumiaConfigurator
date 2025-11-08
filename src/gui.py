@@ -2,6 +2,7 @@ from PIL import Image, ImageTk
 import customtkinter as ctk
 import csv
 import queue
+from serial.tools import list_ports
 
 from utils import resource_path, decimal_to_hex_msb_lsb
 from plotting import setup_plot_figure
@@ -64,64 +65,73 @@ class CanInterfaceApp(ctk.CTk):
         self.entry_sampling = ctk.CTkEntry(self.controls_frame, placeholder_text="Es. 1000")
         self.entry_sampling.grid(row=0, column=1, padx=10, pady=5, sticky="ew")
 
+        # COM port selection (SLCAN)
+        self.label_com = ctk.CTkLabel(self.controls_frame, text="Porta COM (SLCAN):")
+        self.label_com.grid(row=1, column=0, padx=10, pady=5, sticky="w")
+        self.com_var = ctk.StringVar(value="Auto")
+        self.com_menu = ctk.CTkOptionMenu(self.controls_frame, values=["Auto"], variable=self.com_var)
+        self.com_menu.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
+        self.button_refresh_com = ctk.CTkButton(self.controls_frame, text="Refresh", command=self.refresh_com_ports, width=80)
+        self.button_refresh_com.grid(row=1, column=2, padx=10, pady=5, sticky="e")
+
         # CSV save options
         self.checkbox_save_csv = ctk.CTkCheckBox(
             self.controls_frame, text="Salva dati su CSV", command=self.toggle_csv_filename_entry
         )
-        self.checkbox_save_csv.grid(row=1, column=0, padx=10, pady=5, sticky="w")
+        self.checkbox_save_csv.grid(row=2, column=0, padx=10, pady=5, sticky="w")
         self.entry_csv_filename = ctk.CTkEntry(self.controls_frame, placeholder_text="Nome file CSV (es. dati.csv)")
-        self.entry_csv_filename.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
+        self.entry_csv_filename.grid(row=2, column=1, padx=10, pady=5, sticky="ew")
         self.entry_csv_filename.grid_remove()
 
         # Plot selection checkboxes
         self.label_plot_selection = ctk.CTkLabel(self.controls_frame, text="Seleziona grandezze da plottare:")
-        self.label_plot_selection.grid(row=2, column=0, padx=10, pady=5, sticky="w", columnspan=2)
+        self.label_plot_selection.grid(row=3, column=0, padx=10, pady=5, sticky="w", columnspan=2)
         
         self.checkbox_plot_x_orig = ctk.CTkCheckBox(self.controls_frame, text="Plot X (Originale)")
-        self.checkbox_plot_x_orig.grid(row=3, column=0, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_x_orig.grid(row=4, column=0, padx=(10, 5), pady=2, sticky="w")
         self.checkbox_plot_y_orig = ctk.CTkCheckBox(self.controls_frame, text="Plot Y (Originale)")
-        self.checkbox_plot_y_orig.grid(row=3, column=1, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_y_orig.grid(row=4, column=1, padx=(10, 5), pady=2, sticky="w")
         self.checkbox_plot_z_orig = ctk.CTkCheckBox(self.controls_frame, text="Plot Z (Originale)")
-        self.checkbox_plot_z_orig.grid(row=3, column=2, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_z_orig.grid(row=4, column=2, padx=(10, 5), pady=2, sticky="w")
 
         self.checkbox_plot_x_incl = ctk.CTkCheckBox(
             self.controls_frame, text="Plot X_incl (Passa-Basso)", variable=ctk.BooleanVar(value=True)
         )
-        self.checkbox_plot_x_incl.grid(row=4, column=0, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_x_incl.grid(row=5, column=0, padx=(10, 5), pady=2, sticky="w")
         self.checkbox_plot_y_incl = ctk.CTkCheckBox(
             self.controls_frame, text="Plot Y_incl (Passa-Basso)", variable=ctk.BooleanVar(value=True)
         )
-        self.checkbox_plot_y_incl.grid(row=4, column=1, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_y_incl.grid(row=5, column=1, padx=(10, 5), pady=2, sticky="w")
         self.checkbox_plot_z_incl = ctk.CTkCheckBox(
             self.controls_frame, text="Plot Z_incl (Passa-Basso)", variable=ctk.BooleanVar(value=True)
         )
-        self.checkbox_plot_z_incl.grid(row=4, column=2, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_z_incl.grid(row=5, column=2, padx=(10, 5), pady=2, sticky="w")
 
         self.checkbox_plot_x_acc = ctk.CTkCheckBox(self.controls_frame, text="Plot X_acc (Passa-Alto)")
-        self.checkbox_plot_x_acc.grid(row=5, column=0, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_x_acc.grid(row=6, column=0, padx=(10, 5), pady=2, sticky="w")
         self.checkbox_plot_y_acc = ctk.CTkCheckBox(self.controls_frame, text="Plot Y_acc (Passa-Alto)")
-        self.checkbox_plot_y_acc.grid(row=5, column=1, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_y_acc.grid(row=6, column=1, padx=(10, 5), pady=2, sticky="w")
         self.checkbox_plot_z_acc = ctk.CTkCheckBox(self.controls_frame, text="Plot Z_acc (Passa-Alto)")
-        self.checkbox_plot_z_acc.grid(row=5, column=2, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_z_acc.grid(row=6, column=2, padx=(10, 5), pady=2, sticky="w")
 
         self.checkbox_plot_tetha_xz = ctk.CTkCheckBox(
             self.controls_frame, text="Plot Tetha_XZ [deg]", variable=ctk.BooleanVar(value=True)
         )
-        self.checkbox_plot_tetha_xz.grid(row=6, column=0, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_tetha_xz.grid(row=7, column=0, padx=(10, 5), pady=2, sticky="w")
         self.checkbox_plot_tetha_yz = ctk.CTkCheckBox(
             self.controls_frame, text="Plot Tetha_YZ [deg]", variable=ctk.BooleanVar(value=True)
         )
-        self.checkbox_plot_tetha_yz.grid(row=6, column=1, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_tetha_yz.grid(row=7, column=1, padx=(10, 5), pady=2, sticky="w")
 
         # Action buttons
         self.button_start = ctk.CTkButton(
             self.controls_frame, text="Invia e Avvia Acquisizione", command=self.start_acquisition
         )
-        self.button_start.grid(row=7, column=0, padx=10, pady=10, sticky="ew")
+        self.button_start.grid(row=8, column=0, padx=10, pady=10, sticky="ew")
         self.button_stop = ctk.CTkButton(
             self.controls_frame, text="Interrompi Acquisizione", command=self.stop_acquisition, state="disabled"
         )
-        self.button_stop.grid(row=7, column=1, padx=10, pady=10, sticky="ew")
+        self.button_stop.grid(row=8, column=1, padx=10, pady=10, sticky="ew")
 
     def _create_log_area(self):
         """Create the log textbox at the bottom."""
@@ -173,11 +183,31 @@ class CanInterfaceApp(ctk.CTk):
         else:
             self.entry_csv_filename.grid_remove()
 
-    def setup_can_interface_gui(self):
-        """Setup CAN interface using CanController."""
-        success = self.can_controller.setup_bus()
-        if not success:
+    def get_com_ports(self):
+        """Retrieve available COM ports for potential SLCAN devices."""
+        return self.can_controller.list_slcan_ports()
+
+    def refresh_com_ports(self):
+        """Refresh COM port list and update option menu."""
+        ports = self.get_com_ports()
+        if ports:
+            values = ["Auto"] + ports
+            self.com_menu.configure(values=values)
+            # Keep current selection if still valid
+            if self.com_var.get() not in values:
+                self.com_var.set("Auto")
+            self.log_message(f"Porte COM trovate: {', '.join(ports)}")
+            self.button_start.configure(state="normal")
+        else:
+            self.com_menu.configure(values=["Auto"])
+            self.com_var.set("Auto")
+            self.log_message("Nessuna porta COM trovata.")
+            # Disable start until a port appears
             self.button_start.configure(state="disabled")
+
+    def setup_can_interface_gui(self):
+        """Initial GUI setup: refresh COM ports (delay bus init until start)."""
+        self.refresh_com_ports()
 
     def send_can_message_gui(self, can_interface, can_id, data_string):
         """Send CAN message via CanController."""
@@ -199,6 +229,22 @@ class CanInterfaceApp(ctk.CTk):
             self.log_message(f"Sampling frequency calculated: {self.sampling_frequency:.2f} Hz")
         except (ValueError, ZeroDivisionError):
             self.log_message("Enter a valid integer (non-zero) for the interval.")
+            return
+
+        # Setup CAN bus dynamically based on COM selection
+        selected_com = self.com_var.get()
+        if selected_com == "Auto":
+            ports = self.get_com_ports()
+            if ports:
+                selected_com = ports[0]
+                self.log_message(f"Selezione automatica porta COM: {selected_com}")
+            else:
+                self.log_message("Nessuna porta COM disponibile per slcan.")
+                return
+        # Attempt bus setup
+        success = self.can_controller.setup_bus(backend='slcan', channel=selected_com, bitrate=1000000)
+        if not success:
+            self.log_message("Impossibile inizializzare il bus CAN.")
             return
 
         # Send CAN configuration message

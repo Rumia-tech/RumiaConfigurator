@@ -28,18 +28,38 @@ class CanController:
         self.can_process = None
         self.reader_thread = None
         self.reading_active = False
+        self.selected_channel = None
+        self.selected_backend = None
+        self.selected_bitrate = None
+
+    def list_slcan_ports(self):
+        """Return list of available COM ports (potential slcan channels) on Windows using pyserial."""
+        ports = []
+        try:
+            import serial.tools.list_ports as lp
+            for p in lp.comports():
+                # Heuristic: include all COM ports; could refine by p.vid/pid
+                ports.append(p.device)
+        except Exception as e:
+            self.log_callback(f"Unable to list COM ports: {e}")
+        return ports
         
-    def setup_bus(self):
+    def setup_bus(self, backend: str | None = None, channel: str | None = None, bitrate: int = 1000000):
         """
-        Setup CAN bus using environment variables or defaults.
+        Setup CAN bus using provided params or environment defaults.
         Returns: True if setup succeeded, False otherwise
         """
         tty_device = os.environ.get('CAN_TTY_DEVICE', '/dev/ttyACM0')
         can_interface = os.environ.get('CAN_INTERFACE', 'can0')
-        can_backend = os.environ.get('CAN_BACKEND', 'slcan')
-        can_channel = os.environ.get('CAN_CHANNEL', 'COM3')
+        can_backend = (backend or os.environ.get('CAN_BACKEND', 'slcan'))
+        can_channel = (channel or os.environ.get('CAN_CHANNEL', 'COM3'))
 
-        self.log_callback(f"CAN configuration: backend={can_backend} channel={can_channel} tty={tty_device}")
+        # Remember selection
+        self.selected_backend = can_backend
+        self.selected_channel = can_channel
+        self.selected_bitrate = bitrate
+
+        self.log_callback(f"CAN configuration: backend={can_backend} channel={can_channel} bitrate={bitrate} tty={tty_device}")
 
         if can is None:
             self.log_callback("python-can not available: using system commands (Linux only).")
@@ -78,7 +98,7 @@ class CanController:
         try:
             if can_backend.lower() == 'slcan':
                 try:
-                    self.can_bus = can.Bus(bustype='slcan', channel=can_channel, bitrate=1000000)
+                    self.can_bus = can.Bus(bustype='slcan', channel=can_channel, bitrate=bitrate)
                     self.log_callback(f"Bus created: bustype='slcan' channel={can_channel}")
                 except Exception as e:
                     self.log_callback(f"Failed to create slcan bus: {e}. Trying virtual fallback.")
@@ -107,7 +127,7 @@ class CanController:
                     return False
             else:
                 try:
-                    self.can_bus = can.Bus(bustype='slcan', channel=can_channel, bitrate=500000)
+                    self.can_bus = can.Bus(bustype='slcan', channel=can_channel, bitrate=bitrate)
                     self.log_callback(f"Bus created (fallback slcan): channel={can_channel}")
                 except Exception:
                     self.can_bus = can.Bus(bustype='virtual', channel='vcan0')
