@@ -15,12 +15,26 @@ import matplotlib.dates as mdates
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
 from scipy.signal import butter, lfilter
+import pkgutil
+import traceback
+import platform
 
 # Import python-can if available
 try:
     import can
-except Exception:
+    try:
+        interfaces_list = []
+        import can.interfaces as ci
+        interfaces_list = [m.name for m in pkgutil.iter_modules(ci.__path__)]
+    except Exception:
+        interfaces_list = []
+    can_diagnostics = (
+        f"python-can present, version={getattr(can, '__version__', None)}, "
+        f"available interfaces={interfaces_list}"
+    )
+except Exception as e:
     can = None
+    can_diagnostics = f"python-can import failed: {e}; traceback: {traceback.format_exc()}"
 
 def resource_path(relative_path):
     """
