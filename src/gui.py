@@ -133,6 +133,63 @@ class CanInterfaceApp(ctk.CTk):
         )
         self.button_stop.grid(row=8, column=1, padx=10, pady=10, sticky="ew")
 
+        # Custom CAN message area embedded in main GUI
+        self.custom_can_frame = ctk.CTkFrame(self.controls_frame)
+        self.custom_can_frame.grid(row=9, column=0, columnspan=3, padx=10, pady=(0, 10), sticky="ew")
+        try:
+            self.custom_can_frame.grid_columnconfigure(0, weight=0)
+            self.custom_can_frame.grid_columnconfigure(1, weight=0)
+            self.custom_can_frame.grid_columnconfigure(2, weight=0)
+            self.custom_can_frame.grid_columnconfigure(3, weight=0)
+            self.custom_can_frame.grid_columnconfigure(4, weight=1)
+        except Exception:
+            pass
+
+        ctk.CTkLabel(self.custom_can_frame, text="Address").grid(row=0, column=0, padx=(10, 5), pady=(8, 4), sticky="w")
+        self.custom_addr_var = ctk.StringVar(value="000")
+        self.custom_addr_entry = ctk.CTkEntry(self.custom_can_frame, textvariable=self.custom_addr_var, width=70)
+        self.custom_addr_entry.grid(row=0, column=1, padx=(0, 15), pady=(8, 4), sticky="w")
+
+        ctk.CTkLabel(self.custom_can_frame, text="DLC").grid(row=0, column=2, padx=(0, 5), pady=(8, 4), sticky="w")
+        self.custom_dlc_var = ctk.StringVar(value="8")
+        self.custom_dlc_menu = ctk.CTkOptionMenu(self.custom_can_frame, values=[str(i) for i in range(0, 9)], variable=self.custom_dlc_var, width=60)
+        self.custom_dlc_menu.grid(row=0, column=3, padx=(0, 10), pady=(8, 4), sticky="w")
+
+        # Data bytes area
+        self.custom_data_frame = ctk.CTkFrame(self.custom_can_frame)
+        self.custom_data_frame.grid(row=1, column=0, columnspan=5, padx=10, pady=(0, 4), sticky="w")
+        for i in range(8):
+            ctk.CTkLabel(self.custom_data_frame, text=str(i+1)).grid(row=0, column=i, padx=5, pady=(0, 2))
+
+        self.custom_data_vars = []
+        self.custom_data_entries = []
+        for i in range(8):
+            var = ctk.StringVar(value="00")
+            ent = ctk.CTkEntry(self.custom_data_frame, textvariable=var, width=40)
+            ent.grid(row=1, column=i, padx=5)
+            self.custom_data_vars.append(var)
+            self.custom_data_entries.append(ent)
+
+        # Send button
+        self.custom_send_btn = ctk.CTkButton(self.custom_can_frame, text="Send", command=self.send_custom_can)
+        self.custom_send_btn.grid(row=2, column=0, padx=10, pady=(4, 8), sticky="w")
+
+        def _custom_update_data_state(*_):
+            try:
+                n = int(self.custom_dlc_var.get())
+            except Exception:
+                n = 8
+            n = max(0, min(8, n))
+            for idx, ent in enumerate(self.custom_data_entries):
+                if idx < n:
+                    ent.configure(state="normal")
+                else:
+                    ent.configure(state="disabled")
+                    self.custom_data_vars[idx].set("00")
+
+        self.custom_dlc_var.trace_add("write", lambda *_: _custom_update_data_state())
+        _custom_update_data_state()
+
     def _create_log_area(self):
         """Create the log textbox at the bottom."""
         self.log_textbox = ctk.CTkTextbox(self, height=150)
@@ -231,20 +288,8 @@ class CanInterfaceApp(ctk.CTk):
             self.log_message("Enter a valid integer (non-zero) for the interval.")
             return
 
-        # Setup CAN bus dynamically based on COM selection
-        selected_com = self.com_var.get()
-        if selected_com == "Auto":
-            ports = self.get_com_ports()
-            if ports:
-                selected_com = ports[0]
-                self.log_message(f"Selezione automatica porta COM: {selected_com}")
-            else:
-                self.log_message("Nessuna porta COM disponibile per slcan.")
-                return
-        # Attempt bus setup
-        success = self.can_controller.setup_bus(backend='slcan', channel=selected_com, bitrate=1000000)
-        if not success:
-            self.log_message("Impossibile inizializzare il bus CAN.")
+        # Ensure CAN bus is ready
+        if not self.ensure_can_bus_initialized():
             return
 
         # Send CAN configuration message
@@ -346,6 +391,79 @@ class CanInterfaceApp(ctk.CTk):
         self.plot_manager.process_and_plot(self.data_points, self.sampling_frequency, plot_options)
         
         self.update_plot_id = self.after(500, self.update_plot)
+
+    def ensure_can_bus_initialized(self) -> bool:
+        """Ensure CAN bus is initialized using current COM selection. Returns True on success."""
+        if self.can_controller.can_bus is not None:
+            return True
+        selected_com = self.com_var.get()
+        if selected_com == "Auto":
+            ports = self.get_com_ports()
+            if ports:
+                selected_com = ports[0]
+                self.log_message(f"Selezione automatica porta COM: {selected_com}")
+            else:
+                self.log_message("Nessuna porta COM disponibile per slcan.")
+                return False
+        success = self.can_controller.setup_bus(backend='slcan', channel=selected_com, bitrate=1000000)
+        if not success:
+            self.log_message("Impossibile inizializzare il bus CAN.")
+            return False
+        return True
+
+    def send_custom_can(self):
+        """Read custom CAN fields from main GUI and send the message."""
+        # Validate address
+        addr_txt = self.custom_addr_var.get().strip().upper()
+        if not addr_txt:
+            self.log_message("Address mancante.")
+            return
+        try:
+            addr_val = int(addr_txt, 16)
+        except ValueError:
+            self.log_message("Address non valido (usa 3 cifre hex 000-7FF).")
+            return
+        if not (0 <= addr_val <= 0x7FF):
+            self.log_message("Address fuori range (0-7FF).")
+            return
+        addr_txt = f"{addr_val:03X}"
+
+        # DLC and data
+        try:
+            n = int(self.custom_dlc_var.get())
+        except Exception:
+            n = 8
+        n = max(0, min(8, n))
+
+        bytes_list = []
+        for i in range(n):
+            b = self.custom_data_vars[i].get().strip().upper()
+            if b == "":
+                b = "00"
+            if len(b) == 1:
+                b = "0" + b
+            if len(b) != 2:
+                self.log_message(f"Byte {i+1} non valido: '{b}'.")
+                return
+            try:
+                int(b, 16)
+            except ValueError:
+                self.log_message(f"Byte {i+1} non valido: '{b}'.")
+                return
+            bytes_list.append(b)
+
+        data_string = ''.join(bytes_list)
+
+        # Ensure bus
+        if not self.ensure_can_bus_initialized():
+            return
+
+        # Send
+        success = self.can_controller.send_message('can0', addr_txt, data_string)
+        if success:
+            self.log_message(f"Inviato: can0 {addr_txt}#[{n}] { ' '.join(bytes_list) if n>0 else '' }")
+        else:
+            self.log_message("Invio CAN fallito.")
 
     def save_data_to_csv(self):
         """Save collected data to CSV file."""
