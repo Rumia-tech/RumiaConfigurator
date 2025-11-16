@@ -74,68 +74,74 @@ class CanInterfaceApp(ctk.CTk):
         self.button_refresh_com = ctk.CTkButton(self.controls_frame, text="Refresh", command=self.refresh_com_ports, width=80)
         self.button_refresh_com.grid(row=1, column=2, padx=10, pady=5, sticky="e")
 
+        # CAN ID filter
+        self.label_can_id_filter = ctk.CTkLabel(self.controls_frame, text="Filtra CAN ID (hex, es. 61D):")
+        self.label_can_id_filter.grid(row=2, column=0, padx=10, pady=5, sticky="w")
+        self.entry_can_id_filter = ctk.CTkEntry(self.controls_frame, placeholder_text="Lascia vuoto per tutti")
+        self.entry_can_id_filter.grid(row=2, column=1, padx=10, pady=5, sticky="ew")
+
         # CSV save options
         self.checkbox_save_csv = ctk.CTkCheckBox(
             self.controls_frame, text="Salva dati su CSV", command=self.toggle_csv_filename_entry
         )
-        self.checkbox_save_csv.grid(row=2, column=0, padx=10, pady=5, sticky="w")
+        self.checkbox_save_csv.grid(row=3, column=0, padx=10, pady=5, sticky="w")
         self.entry_csv_filename = ctk.CTkEntry(self.controls_frame, placeholder_text="Nome file CSV (es. dati.csv)")
-        self.entry_csv_filename.grid(row=2, column=1, padx=10, pady=5, sticky="ew")
+        self.entry_csv_filename.grid(row=3, column=1, padx=10, pady=5, sticky="ew")
         self.entry_csv_filename.grid_remove()
 
         # Plot selection checkboxes
         self.label_plot_selection = ctk.CTkLabel(self.controls_frame, text="Seleziona grandezze da plottare:")
-        self.label_plot_selection.grid(row=3, column=0, padx=10, pady=5, sticky="w", columnspan=2)
+        self.label_plot_selection.grid(row=4, column=0, padx=10, pady=5, sticky="w", columnspan=2)
         
         self.checkbox_plot_x_orig = ctk.CTkCheckBox(self.controls_frame, text="Plot X (Originale)")
-        self.checkbox_plot_x_orig.grid(row=4, column=0, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_x_orig.grid(row=5, column=0, padx=(10, 5), pady=2, sticky="w")
         self.checkbox_plot_y_orig = ctk.CTkCheckBox(self.controls_frame, text="Plot Y (Originale)")
-        self.checkbox_plot_y_orig.grid(row=4, column=1, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_y_orig.grid(row=5, column=1, padx=(10, 5), pady=2, sticky="w")
         self.checkbox_plot_z_orig = ctk.CTkCheckBox(self.controls_frame, text="Plot Z (Originale)")
-        self.checkbox_plot_z_orig.grid(row=4, column=2, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_z_orig.grid(row=5, column=2, padx=(10, 5), pady=2, sticky="w")
 
         self.checkbox_plot_x_incl = ctk.CTkCheckBox(
             self.controls_frame, text="Plot X_incl (Passa-Basso)", variable=ctk.BooleanVar(value=True)
         )
-        self.checkbox_plot_x_incl.grid(row=5, column=0, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_x_incl.grid(row=6, column=0, padx=(10, 5), pady=2, sticky="w")
         self.checkbox_plot_y_incl = ctk.CTkCheckBox(
             self.controls_frame, text="Plot Y_incl (Passa-Basso)", variable=ctk.BooleanVar(value=True)
         )
-        self.checkbox_plot_y_incl.grid(row=5, column=1, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_y_incl.grid(row=6, column=1, padx=(10, 5), pady=2, sticky="w")
         self.checkbox_plot_z_incl = ctk.CTkCheckBox(
             self.controls_frame, text="Plot Z_incl (Passa-Basso)", variable=ctk.BooleanVar(value=True)
         )
-        self.checkbox_plot_z_incl.grid(row=5, column=2, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_z_incl.grid(row=6, column=2, padx=(10, 5), pady=2, sticky="w")
 
         self.checkbox_plot_x_acc = ctk.CTkCheckBox(self.controls_frame, text="Plot X_acc (Passa-Alto)")
-        self.checkbox_plot_x_acc.grid(row=6, column=0, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_x_acc.grid(row=7, column=0, padx=(10, 5), pady=2, sticky="w")
         self.checkbox_plot_y_acc = ctk.CTkCheckBox(self.controls_frame, text="Plot Y_acc (Passa-Alto)")
-        self.checkbox_plot_y_acc.grid(row=6, column=1, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_y_acc.grid(row=7, column=1, padx=(10, 5), pady=2, sticky="w")
         self.checkbox_plot_z_acc = ctk.CTkCheckBox(self.controls_frame, text="Plot Z_acc (Passa-Alto)")
-        self.checkbox_plot_z_acc.grid(row=6, column=2, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_z_acc.grid(row=7, column=2, padx=(10, 5), pady=2, sticky="w")
 
         self.checkbox_plot_tetha_xz = ctk.CTkCheckBox(
             self.controls_frame, text="Plot Tetha_XZ [deg]", variable=ctk.BooleanVar(value=True)
         )
-        self.checkbox_plot_tetha_xz.grid(row=7, column=0, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_tetha_xz.grid(row=8, column=0, padx=(10, 5), pady=2, sticky="w")
         self.checkbox_plot_tetha_yz = ctk.CTkCheckBox(
             self.controls_frame, text="Plot Tetha_YZ [deg]", variable=ctk.BooleanVar(value=True)
         )
-        self.checkbox_plot_tetha_yz.grid(row=7, column=1, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_tetha_yz.grid(row=8, column=1, padx=(10, 5), pady=2, sticky="w")
 
         # Action buttons
         self.button_start = ctk.CTkButton(
             self.controls_frame, text="Invia e Avvia Acquisizione", command=self.start_acquisition
         )
-        self.button_start.grid(row=8, column=0, padx=10, pady=10, sticky="ew")
+        self.button_start.grid(row=9, column=0, padx=10, pady=10, sticky="ew")
         self.button_stop = ctk.CTkButton(
             self.controls_frame, text="Interrompi Acquisizione", command=self.stop_acquisition, state="disabled"
         )
-        self.button_stop.grid(row=8, column=1, padx=10, pady=10, sticky="ew")
+        self.button_stop.grid(row=9, column=1, padx=10, pady=10, sticky="ew")
 
         # Custom CAN message area embedded in main GUI
         self.custom_can_frame = ctk.CTkFrame(self.controls_frame)
-        self.custom_can_frame.grid(row=9, column=0, columnspan=3, padx=10, pady=(0, 10), sticky="ew")
+        self.custom_can_frame.grid(row=10, column=0, columnspan=3, padx=10, pady=(0, 10), sticky="ew")
         try:
             self.custom_can_frame.grid_columnconfigure(0, weight=0)
             self.custom_can_frame.grid_columnconfigure(1, weight=0)
@@ -313,8 +319,27 @@ class CanInterfaceApp(ctk.CTk):
         self.button_stop.configure(state="normal")
         self.log_message("Starting acquisition and real-time CAN data processing...")
 
-        # Start CAN reader
+        # Start CAN reader with ID filtering
+        filter_id_text = self.entry_can_id_filter.get().strip().upper()
+        filter_id = None
+        if filter_id_text:
+            try:
+                filter_id = int(filter_id_text, 16)
+                self.log_message(f"Filtraggio attivo per CAN ID: {filter_id:X}")
+            except ValueError:
+                self.log_message("CAN ID filter non valido, acquisisco tutti i frame.")
+        else:
+            self.log_message("Nessun filtro CAN ID, acquisisco tutti i frame.")
+        
         def data_received(timestamp, can_id, x, y, z):
+            # Filter by CAN ID if specified
+            if filter_id is not None:
+                try:
+                    frame_id = int(can_id, 16) if isinstance(can_id, str) else can_id
+                    if frame_id != filter_id:
+                        return
+                except Exception:
+                    return
             self.data_queue.put((timestamp, can_id, x, y, z))
         
         def should_stop():
