@@ -3,7 +3,13 @@ RumiaConfigurator - CAN Interface Application
 Entry point for the application.
 """
 
-from gui import CanInterfaceApp
+#test commit on main
+
+# Import python-can if available
+try:
+    import can
+except Exception:
+    can = None
 
 
 def main():
