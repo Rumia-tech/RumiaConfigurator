@@ -35,7 +35,15 @@ class CanInterfaceApp(ctk.CTk):
         ctk.set_appearance_mode("System")
         ctk.set_default_color_theme("blue")
 
-        self._create_controls()
+        # Create tab view
+        self.tabview = ctk.CTkTabview(self)
+        self.tabview.grid(row=0, column=0, columnspan=3, rowspan=2, padx=10, pady=10, sticky="nsew")
+        
+        self.data_tab = self.tabview.add("Data")
+        self.config_tab = self.tabview.add("Configuration")
+
+        self._create_data_controls()
+        self._create_config_controls()
         self._create_log_area()
         self._create_plot_area()
 
@@ -43,105 +51,69 @@ class CanInterfaceApp(ctk.CTk):
         self.after(100, self.setup_can_interface_gui)
         self.after(100, self.process_data_queue)
 
-    def _create_controls(self):
-        """Create the control panel with input fields and buttons."""
-        self.controls_frame = ctk.CTkFrame(self)
-        self.controls_frame.grid(row=0, column=0, columnspan=3, rowspan=2, padx=10, pady=10, sticky="nsew")
-
-        # Logo
-        try:
-            logo_path = resource_path("assets/Rumia_logo.png")
-            self.logo_image = Image.open(logo_path)
-            self.logo_image = self.logo_image.resize((70, 70))
-            self.logo_tk = ImageTk.PhotoImage(self.logo_image)
-            self.logo_label = ctk.CTkLabel(self.controls_frame, image=self.logo_tk, text="")
-            self.logo_label.grid(row=0, column=2, rowspan=4, padx=10, pady=5, sticky="ne")
-        except Exception:
-            pass
-
-        # Sampling interval input
-        self.label_sampling = ctk.CTkLabel(self.controls_frame, text="Intervallo di campionamento (1-2000 ms):")
-        self.label_sampling.grid(row=0, column=0, padx=10, pady=5, sticky="w")
-        self.entry_sampling = ctk.CTkEntry(self.controls_frame, placeholder_text="Es. 1000")
-        self.entry_sampling.grid(row=0, column=1, padx=10, pady=5, sticky="ew")
-
-        # COM port selection (SLCAN)
-        self.label_com = ctk.CTkLabel(self.controls_frame, text="Porta COM (SLCAN):")
-        self.label_com.grid(row=1, column=0, padx=10, pady=5, sticky="w")
-        self.com_var = ctk.StringVar(value="Auto")
-        self.com_menu = ctk.CTkOptionMenu(self.controls_frame, values=["Auto"], variable=self.com_var)
-        self.com_menu.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
-        self.button_refresh_com = ctk.CTkButton(self.controls_frame, text="Refresh", command=self.refresh_com_ports, width=80)
-        self.button_refresh_com.grid(row=1, column=2, padx=10, pady=5, sticky="e")
-
-        # CAN ID filter
-        self.label_can_id_filter = ctk.CTkLabel(self.controls_frame, text="Filtra CAN ID (hex, es. 61D):")
-        self.label_can_id_filter.grid(row=2, column=0, padx=10, pady=5, sticky="w")
-        self.entry_can_id_filter = ctk.CTkEntry(self.controls_frame, placeholder_text="Lascia vuoto per tutti")
-        self.entry_can_id_filter.grid(row=2, column=1, padx=10, pady=5, sticky="ew")
+    def _create_data_controls(self):
+        """Create the Data tab with plot selection and acquisition controls."""
+        self.data_tab.grid_columnconfigure(0, weight=1)
+        self.data_tab.grid_rowconfigure(0, weight=0)
 
         # CSV save options
         self.checkbox_save_csv = ctk.CTkCheckBox(
-            self.controls_frame, text="Salva dati su CSV", command=self.toggle_csv_filename_entry
+            self.data_tab, text="Salva dati su CSV", command=self.toggle_csv_filename_entry
         )
-        self.checkbox_save_csv.grid(row=3, column=0, padx=10, pady=5, sticky="w")
-        self.entry_csv_filename = ctk.CTkEntry(self.controls_frame, placeholder_text="Nome file CSV (es. dati.csv)")
-        self.entry_csv_filename.grid(row=3, column=1, padx=10, pady=5, sticky="ew")
+        self.checkbox_save_csv.grid(row=0, column=0, padx=10, pady=5, sticky="w")
+        self.entry_csv_filename = ctk.CTkEntry(self.data_tab, placeholder_text="Nome file CSV (es. dati.csv)")
+        self.entry_csv_filename.grid(row=0, column=1, padx=10, pady=5, sticky="ew")
         self.entry_csv_filename.grid_remove()
 
+        # CAN ID filter
+        self.label_can_id_filter = ctk.CTkLabel(self.data_tab, text="Filtra CAN ID (hex, es. 61D):")
+        self.label_can_id_filter.grid(row=1, column=0, padx=10, pady=5, sticky="w")
+        self.entry_can_id_filter = ctk.CTkEntry(self.data_tab, placeholder_text="Lascia vuoto per tutti")
+        self.entry_can_id_filter.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
+
         # Plot selection checkboxes
-        self.label_plot_selection = ctk.CTkLabel(self.controls_frame, text="Seleziona grandezze da plottare:")
-        self.label_plot_selection.grid(row=4, column=0, padx=10, pady=5, sticky="w", columnspan=2)
+        self.label_plot_selection = ctk.CTkLabel(self.data_tab, text="Seleziona grandezze da plottare:")
+        self.label_plot_selection.grid(row=2, column=0, padx=10, pady=5, sticky="w", columnspan=2)
         
-        self.checkbox_plot_x_orig = ctk.CTkCheckBox(self.controls_frame, text="Plot X (Originale)")
-        self.checkbox_plot_x_orig.grid(row=5, column=0, padx=(10, 5), pady=2, sticky="w")
-        self.checkbox_plot_y_orig = ctk.CTkCheckBox(self.controls_frame, text="Plot Y (Originale)")
-        self.checkbox_plot_y_orig.grid(row=5, column=1, padx=(10, 5), pady=2, sticky="w")
-        self.checkbox_plot_z_orig = ctk.CTkCheckBox(self.controls_frame, text="Plot Z (Originale)")
-        self.checkbox_plot_z_orig.grid(row=5, column=2, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_x_orig = ctk.CTkCheckBox(self.data_tab, text="Plot X (Originale)")
+        self.checkbox_plot_x_orig.grid(row=3, column=0, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_y_orig = ctk.CTkCheckBox(self.data_tab, text="Plot Y (Originale)")
+        self.checkbox_plot_y_orig.grid(row=3, column=1, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_z_orig = ctk.CTkCheckBox(self.data_tab, text="Plot Z (Originale)")
+        self.checkbox_plot_z_orig.grid(row=3, column=2, padx=(10, 5), pady=2, sticky="w")
 
         self.checkbox_plot_x_incl = ctk.CTkCheckBox(
-            self.controls_frame, text="Plot X_incl (Passa-Basso)", variable=ctk.BooleanVar(value=True)
+            self.data_tab, text="Plot X_incl (Passa-Basso)", variable=ctk.BooleanVar(value=True)
         )
-        self.checkbox_plot_x_incl.grid(row=6, column=0, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_x_incl.grid(row=4, column=0, padx=(10, 5), pady=2, sticky="w")
         self.checkbox_plot_y_incl = ctk.CTkCheckBox(
-            self.controls_frame, text="Plot Y_incl (Passa-Basso)", variable=ctk.BooleanVar(value=True)
+            self.data_tab, text="Plot Y_incl (Passa-Basso)", variable=ctk.BooleanVar(value=True)
         )
-        self.checkbox_plot_y_incl.grid(row=6, column=1, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_y_incl.grid(row=4, column=1, padx=(10, 5), pady=2, sticky="w")
         self.checkbox_plot_z_incl = ctk.CTkCheckBox(
-            self.controls_frame, text="Plot Z_incl (Passa-Basso)", variable=ctk.BooleanVar(value=True)
+            self.data_tab, text="Plot Z_incl (Passa-Basso)", variable=ctk.BooleanVar(value=True)
         )
-        self.checkbox_plot_z_incl.grid(row=6, column=2, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_z_incl.grid(row=4, column=2, padx=(10, 5), pady=2, sticky="w")
 
-        self.checkbox_plot_x_acc = ctk.CTkCheckBox(self.controls_frame, text="Plot X_acc (Passa-Alto)")
-        self.checkbox_plot_x_acc.grid(row=7, column=0, padx=(10, 5), pady=2, sticky="w")
-        self.checkbox_plot_y_acc = ctk.CTkCheckBox(self.controls_frame, text="Plot Y_acc (Passa-Alto)")
-        self.checkbox_plot_y_acc.grid(row=7, column=1, padx=(10, 5), pady=2, sticky="w")
-        self.checkbox_plot_z_acc = ctk.CTkCheckBox(self.controls_frame, text="Plot Z_acc (Passa-Alto)")
-        self.checkbox_plot_z_acc.grid(row=7, column=2, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_x_acc = ctk.CTkCheckBox(self.data_tab, text="Plot X_acc (Passa-Alto)")
+        self.checkbox_plot_x_acc.grid(row=5, column=0, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_y_acc = ctk.CTkCheckBox(self.data_tab, text="Plot Y_acc (Passa-Alto)")
+        self.checkbox_plot_y_acc.grid(row=5, column=1, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_z_acc = ctk.CTkCheckBox(self.data_tab, text="Plot Z_acc (Passa-Alto)")
+        self.checkbox_plot_z_acc.grid(row=5, column=2, padx=(10, 5), pady=2, sticky="w")
 
         self.checkbox_plot_tetha_xz = ctk.CTkCheckBox(
-            self.controls_frame, text="Plot Tetha_XZ [deg]", variable=ctk.BooleanVar(value=True)
+            self.data_tab, text="Plot Tetha_XZ [deg]", variable=ctk.BooleanVar(value=True)
         )
-        self.checkbox_plot_tetha_xz.grid(row=8, column=0, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_tetha_xz.grid(row=6, column=0, padx=(10, 5), pady=2, sticky="w")
         self.checkbox_plot_tetha_yz = ctk.CTkCheckBox(
-            self.controls_frame, text="Plot Tetha_YZ [deg]", variable=ctk.BooleanVar(value=True)
+            self.data_tab, text="Plot Tetha_YZ [deg]", variable=ctk.BooleanVar(value=True)
         )
-        self.checkbox_plot_tetha_yz.grid(row=8, column=1, padx=(10, 5), pady=2, sticky="w")
+        self.checkbox_plot_tetha_yz.grid(row=6, column=1, padx=(10, 5), pady=2, sticky="w")
 
-        # Action buttons
-        self.button_start = ctk.CTkButton(
-            self.controls_frame, text="Invia e Avvia Acquisizione", command=self.start_acquisition
-        )
-        self.button_start.grid(row=9, column=0, padx=10, pady=10, sticky="ew")
-        self.button_stop = ctk.CTkButton(
-            self.controls_frame, text="Interrompi Acquisizione", command=self.stop_acquisition, state="disabled"
-        )
-        self.button_stop.grid(row=9, column=1, padx=10, pady=10, sticky="ew")
-
-        # Custom CAN message area embedded in main GUI
-        self.custom_can_frame = ctk.CTkFrame(self.controls_frame)
-        self.custom_can_frame.grid(row=10, column=0, columnspan=3, padx=10, pady=(0, 10), sticky="ew")
+        # Custom CAN message area
+        self.custom_can_frame = ctk.CTkFrame(self.data_tab)
+        self.custom_can_frame.grid(row=8, column=0, columnspan=3, padx=10, pady=(0, 10), sticky="ew")
         try:
             self.custom_can_frame.grid_columnconfigure(0, weight=0)
             self.custom_can_frame.grid_columnconfigure(1, weight=0)
@@ -196,18 +168,38 @@ class CanInterfaceApp(ctk.CTk):
         self.custom_dlc_var.trace_add("write", lambda *_: _custom_update_data_state())
         _custom_update_data_state()
 
-    def _create_log_area(self):
-        """Create the log textbox at the bottom."""
-        self.log_textbox = ctk.CTkTextbox(self, height=150)
-        self.log_textbox.grid(row=2, column=0, columnspan=4, padx=10, pady=10, sticky="nsew")
-        self.log_textbox.insert("end", "Ready for configuration and CAN acquisition.\n")
-        self.log_textbox.configure(state="disabled")
-        self.grid_rowconfigure(2, weight=1)
+# Tab with configuration controls
+# COM port selection
+    def _create_config_controls(self):
+        """Create the Configuration tab with COM port settings."""
+        self.config_tab.grid_columnconfigure(0, weight=1)
+
+        # COM port selection (SLCAN)
+        self.label_com = ctk.CTkLabel(self.config_tab, text="Porta COM (SLCAN):")
+        self.label_com.grid(row=0, column=0, padx=10, pady=5, sticky="w")
+        self.com_var = ctk.StringVar(value="Auto")
+        self.com_menu = ctk.CTkOptionMenu(self.config_tab, values=["Auto"], variable=self.com_var)
+        self.com_menu.grid(row=0, column=1, padx=10, pady=5, sticky="ew")
+        self.button_refresh_com = ctk.CTkButton(self.config_tab, text="Refresh", command=self.refresh_com_ports, width=80)
+        self.button_refresh_com.grid(row=0, column=2, padx=10, pady=5, sticky="e")
+        
+        # Action buttons
+        self.button_start = ctk.CTkButton(
+            self.config_tab, text="Avvia Acquisizione", command=self.start_acquisition
+        )
+        self.button_start.grid(row=1, column=0, padx=10, pady=10, sticky="ew")
+        self.button_stop = ctk.CTkButton(
+            self.config_tab, text="Interrompi Acquisizione", command=self.stop_acquisition, state="disabled"
+        )
+        self.button_stop.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
 
     def _create_plot_area(self):
-        """Create the matplotlib plotting area with dark theme."""
-        self.plot_frame = ctk.CTkFrame(self)
-        self.plot_frame.grid(row=0, column=3, rowspan=2, padx=10, pady=10, sticky="nsew")
+        """Create the matplotlib plotting area inside the Data tab with dark theme."""
+        # Configure Data tab grid to accommodate plot
+        self.data_tab.grid_columnconfigure(3, weight=3)
+        
+        self.plot_frame = ctk.CTkFrame(self.data_tab)
+        self.plot_frame.grid(row=0, column=3, rowspan=9, padx=10, pady=10, sticky="nsew")
         self.plot_frame.grid_rowconfigure(0, weight=1)
         self.plot_frame.grid_columnconfigure(0, weight=1)
 
@@ -231,6 +223,14 @@ class CanInterfaceApp(ctk.CTk):
 
         # Initialize PlotManager
         self.plot_manager = PlotManager(self.ax, self.canvas, cutoff_lowpass=1.0, cutoff_highpass=1.0)
+    
+    def _create_log_area(self):
+        """Create the log textbox at the bottom."""
+        self.log_textbox = ctk.CTkTextbox(self, height=150)
+        self.log_textbox.grid(row=2, column=0, columnspan=4, padx=10, pady=10, sticky="nsew")
+        self.log_textbox.insert("end", "Ready for configuration and CAN acquisition.\n")
+        self.log_textbox.configure(state="disabled")
+        self.grid_rowconfigure(2, weight=1)
 
     def log_message(self, message):
         """Add a message to the log textbox."""
@@ -282,27 +282,9 @@ class CanInterfaceApp(ctk.CTk):
             self.log_message("Acquisition already in progress.")
             return
 
-        # Validate sampling interval
-        try:
-            sampling_interval = int(self.entry_sampling.get())
-            if not 1 <= sampling_interval <= 2000:
-                self.log_message("Invalid value. Enter a value between 1 and 2000.")
-                return
-            self.sampling_frequency = 1000 / sampling_interval
-            self.log_message(f"Sampling frequency calculated: {self.sampling_frequency:.2f} Hz")
-        except (ValueError, ZeroDivisionError):
-            self.log_message("Enter a valid integer (non-zero) for the interval.")
-            return
-
         # Ensure CAN bus is ready
         if not self.ensure_can_bus_initialized():
             return
-
-        # Send CAN configuration message
-        msb, lsb = decimal_to_hex_msb_lsb(sampling_interval)
-        can_message = f'2B001805{msb}{lsb}0000'
-        self.log_message(f"Sending CAN message: can0 61D#{can_message}")
-        self.send_can_message_gui('can0', '61D', can_message)
 
         # Validate CSV filename if saving
         if self.checkbox_save_csv.get() == 1 and not self.entry_csv_filename.get():
@@ -312,6 +294,9 @@ class CanInterfaceApp(ctk.CTk):
         # Clear previous data and plot
         self.data_points = []
         self.plot_manager.clear_plot()
+        
+        # Initialize sampling frequency (will be calculated from received data)
+        self.sampling_frequency = 0
 
         # Update UI state
         self.acquisition_active = True
@@ -349,12 +334,17 @@ class CanInterfaceApp(ctk.CTk):
 
         # Start plot update cycle
         self.update_plot()
+        self.log_message("Plot update cycle started.")
 
     def process_data_queue(self):
         """Process incoming data from the queue."""
+        count = 0
         while not self.data_queue.empty():
             data = self.data_queue.get()
             self.data_points.append(data)
+            count += 1
+        if count > 0 and self.acquisition_active:
+            self.log_message(f"Processed {count} data points. Total: {len(self.data_points)}")
         self.after(100, self.process_data_queue)
 
     def stop_acquisition(self):
@@ -391,31 +381,32 @@ class CanInterfaceApp(ctk.CTk):
             self.button_stop.configure(state="disabled")
 
     def update_plot(self):
-        """Update the plot with current data using PlotManager."""
-        if not self.acquisition_active or len(self.data_points) < 2:
-            if self.acquisition_active:
-                self.update_plot_id = self.after(500, self.update_plot)
+        """Update the plot with current data using PlotManager every 300ms."""
+        if not self.acquisition_active:
             return
+            
+        if len(self.data_points) >= 2:
+            # Get plot options from checkboxes
+            plot_options = {
+                'x_orig': self.checkbox_plot_x_orig.get(),
+                'y_orig': self.checkbox_plot_y_orig.get(),
+                'z_orig': self.checkbox_plot_z_orig.get(),
+                'x_incl': self.checkbox_plot_x_incl.get(),
+                'y_incl': self.checkbox_plot_y_incl.get(),
+                'z_incl': self.checkbox_plot_z_incl.get(),
+                'x_acc': self.checkbox_plot_x_acc.get(),
+                'y_acc': self.checkbox_plot_y_acc.get(),
+                'z_acc': self.checkbox_plot_z_acc.get(),
+                'tetha_xz': self.checkbox_plot_tetha_xz.get(),
+                'tetha_yz': self.checkbox_plot_tetha_yz.get(),
+            }
 
-        # Get plot options from checkboxes
-        plot_options = {
-            'x_orig': self.checkbox_plot_x_orig.get(),
-            'y_orig': self.checkbox_plot_y_orig.get(),
-            'z_orig': self.checkbox_plot_z_orig.get(),
-            'x_incl': self.checkbox_plot_x_incl.get(),
-            'y_incl': self.checkbox_plot_y_incl.get(),
-            'z_incl': self.checkbox_plot_z_incl.get(),
-            'x_acc': self.checkbox_plot_x_acc.get(),
-            'y_acc': self.checkbox_plot_y_acc.get(),
-            'z_acc': self.checkbox_plot_z_acc.get(),
-            'tetha_xz': self.checkbox_plot_tetha_xz.get(),
-            'tetha_yz': self.checkbox_plot_tetha_yz.get(),
-        }
-
-        # Delegate to PlotManager
-        self.plot_manager.process_and_plot(self.data_points, self.sampling_frequency, plot_options)
+            # Use fixed sampling frequency (1 Hz) for filtering
+            # Delegate to PlotManager
+            self.plot_manager.process_and_plot(self.data_points, 1.0, plot_options)
         
-        self.update_plot_id = self.after(500, self.update_plot)
+        # Schedule next update in 300ms
+        self.update_plot_id = self.after(300, self.update_plot)
 
     def ensure_can_bus_initialized(self) -> bool:
         """Ensure CAN bus is initialized using current COM selection. Returns True on success."""
