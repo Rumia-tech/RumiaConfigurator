@@ -104,13 +104,15 @@ class PlotManager:
     
     def _apply_plot_styling(self):
         """Apply consistent styling to the plot (dark theme)."""
-        self.ax.legend(
-            fontsize='small',
-            loc='upper left',
-            bbox_to_anchor=(1, 1),
-            facecolor='#363636',
-            labelcolor='white'
-        )
+        handles, labels = self.ax.get_legend_handles_labels()
+        if handles:
+            self.ax.legend(
+                fontsize='small',
+                loc='upper left',
+                bbox_to_anchor=(1, 1),
+                facecolor='#363636',
+                labelcolor='white'
+            )
         self.ax.set_title('Sensor Data in Real Time', color='white')
         self.ax.set_xlabel('Time', color='white')
         self.ax.set_ylabel('Value', color='white')
@@ -159,3 +161,36 @@ class PlotManager:
             'tetha_xz': tetha_xz,
             'tetha_yz': tetha_yz,
         }
+
+    def process_and_plot_pdo_signals(self, data_points, selected_signal_keys):
+        """Plot selected PDO signals from normalized records.
+
+        Expected data_points format:
+            {
+                'timestamp': datetime,
+                'signals': {'Acc_x': 0.1, 'Acc_y': 0.2, ...}
+            }
+        """
+        if not data_points:
+            self.clear_plot()
+            return
+
+        self.ax.clear()
+        signal_series = {key: {"t": [], "v": []} for key in selected_signal_keys}
+
+        for record in data_points:
+            ts = record.get("timestamp")
+            signals = record.get("signals", {})
+            for key in selected_signal_keys:
+                if key in signals:
+                    signal_series[key]["t"].append(ts)
+                    signal_series[key]["v"].append(signals[key])
+
+        for key in selected_signal_keys:
+            times = signal_series[key]["t"]
+            values = signal_series[key]["v"]
+            if times:
+                self.ax.plot(times, values, label=key)
+
+        self._apply_plot_styling()
+        self.canvas.draw()

@@ -86,31 +86,42 @@ Inherits from `customtkinter.CTk` and manages the entire GUI.
 
 **Controls:**
 
-1. **COM Port Selection**
+1. **COM Port Selection + CANbus Bitrate**
    - Label: "Porta COM (SLCAN):"
    - Dropdown menu: Lists available COM ports + "Auto" option
    - Refresh button: Scans available COM ports
+   - CANbus bitrate control is positioned below COM controls
+   - Label includes measurement unit: "CANbus bitrate [kbit/s]"
+   - Dropdown list derived from `SmartIMU.eds` (object `0x600A CAN_Baudrate`)
+   - "Detect bitrate" button: probes common CAN bitrates and auto-fills the entry
+   - If connection fails with selected bitrate, software tries automatic bitrate detection and retries bus initialization
 
 2. **Acquisition Control Buttons**
    - "SmartIMU connection" button: Starts CAN data acquisition
    - "SmartIMU disconnection" button: Stops acquisition (state: disabled initially)
 
 3. **Current configuration acquisition Button**
-   - The application send to sensor one by one Server Data Object message to acquire all information about current status of the Sensor
+   - The application sends one CANopen SDO upload request for each supported parameter
+   - For each request it waits for SDO response (`0x580 + NodeID`), parses value and updates the corresponding field in "All configuration"
+   - If SDO timeout/abort is detected, a popup warning is shown and the next parameter is processed
 
 4. **All configuration**
-   For every configuration there is a small window with data and a button to send. Data can be written by user or by "Current configuration" acquisition Button. User can write a data, click to send button and application send SDO message to overwrite configuration in the sensor. Application read SDO answer from CAN and popup a message if something go wrong.
-   List of parameters:
+   For every configuration there is a small window with data and a button to send. Fields are initially empty. Data can be written by user or by "Current configuration" acquisition Button. User can write a data, click to send button and application send SDO message to overwrite configuration in the sensor.
+   - If an SDO write confirmation (`0x60`) is received, value remains in the field.
+   - If SDO write fails/aborts/timeouts, popup is shown and the field is cleared.
+   - When "Current configuration acquisition" is executed, fields are populated from SDO read responses.
+   List of parameters currently available in `SmartIMU.eds` and implemented in software:
    - Heartbeat
    - Node ID
-   - CANbus bitrate
    - TPDO1 period
    - TPDO2 period
    - Accelerometer range
    - Gyroscope range
+   - CAN termina resistor
+   CANbus bitrate is configured in the top connection area (not in "All configuration").
+   Parameters requested in UI but not present in current EDS (shown as N/A):
    - Accelerometer filter
    - Gyroscope filter
-   - CAN termina resistor
    For configuration of parameter application use CANopen rules using SmartIMU.eds
    
 
@@ -122,43 +133,28 @@ Inherits from `customtkinter.CTk` and manages the entire GUI.
    - Checkbox: "Salva dati su CSV"
    - Entry field: CSV filename (appears when checkbox is enabled)
 
-2. **CAN ID Filter**
-   - Label: "Filtra CAN ID (hex, es. 61D):"
-   - Entry field: Accepts hexadecimal values (empty = no filter)
+2. **Plot Selection Checkboxes (PDO from EDS)**
+   - The UI discovers mapped TPDO application objects from `SmartIMU.eds`
+   - Mapping source: `1A00`, `1A01` (and additional `1A0x` if present)
+   - Displayed checkboxes are generated from object names (example: `Acc_x`, `Acc_y`, `Acc_z`, `Vang_x`, `Vang_y`, `Vang_z`)
+   - No manual CAN ID filter is present in Data tab; all incoming frames are read and only mapped PDO signals are accumulated
 
-3. **Plot Selection Checkboxes** (organized in rows)
-   
-   **Row 1: Original Signals (unchecked by default)**
-   - `checkbox_plot_x_orig`: Plot X (Originale)
-   - `checkbox_plot_y_orig`: Plot Y (Originale)
-   - `checkbox_plot_z_orig`: Plot Z (Originale)
-   
-   **Row 2: Low-Pass Filtered Signals (checked by default)**
-   - `checkbox_plot_x_incl`: Plot X_incl (Passa-Basso)
-   - `checkbox_plot_y_incl`: Plot Y_incl (Passa-Basso)
-   - `checkbox_plot_z_incl`: Plot Z_incl (Passa-Basso)
-   
-   **Row 3: High-Pass Filtered Signals (unchecked by default)**
-   - `checkbox_plot_x_acc`: Plot X_acc (Passa-Alto)
-   - `checkbox_plot_y_acc`: Plot Y_acc (Passa-Alto)
-   - `checkbox_plot_z_acc`: Plot Z_acc (Passa-Alto)
-   
-   **Row 4: Angle Computations (checked by default)**
-   - `checkbox_plot_tetha_xz`: Plot Tetha_XZ [deg]
-   - `checkbox_plot_tetha_yz`: Plot Tetha_YZ [deg]
-
-4. **Custom CAN Message Sender**
-   - Address field (hex 000-7FF)
-   - DLC selector (0-8)
-   - 8 data byte entry fields (disabled beyond DLC)
-   - Send button
-
-5. **Plot Area**
+3. **Plot Area**
    - Matplotlib figure embedded in the tab
    - Size: proportional to remaining space (column 3, rows 0-9)
    - Dark theme with white text/axes
 
 ### 4.4 Tab 2: Developer Tab
+
+- **Live CAN traffic monitor**: shows all TX/RX CAN frames exchanged by the software
+- **Log format**: timestamp, direction, CAN ID, DLC, payload, source backend
+- **Export button**: exports the full CAN traffic log to CSV file
+- **Clear button**: clears current in-memory CAN traffic history
+- **Custom CAN Message Sender**:
+   - Address field (hex 000-7FF)
+   - DLC selector (0-8)
+   - 8 data byte entry fields (disabled beyond DLC)
+   - Send button
 
 ### 4.5 Log Area
 
@@ -186,6 +182,7 @@ selected_channel        # Currently selected COM port or interface name
 selected_backend        # CAN backend type (slcan, virtual, kvaser, pcan)
 selected_bitrate        # Bitrate (default 1000000)
 log_callback            # Function for logging messages
+traffic_callback        # Optional callback for each TX/RX CAN frame
 ```
 
 **Key Methods:**
@@ -204,6 +201,7 @@ log_callback            # Function for logging messages
    - Sends CAN message with given ID and data bytes
    - `can_id`: Hex string (e.g., '61D')
    - `data_string`: Hex bytes string (e.g., '2B00180500010000')
+   - Emits TX traffic event to `traffic_callback` on success
    - Returns: `True` on success, `False` on failure
 
 4. **`start_reader(data_callback, stop_flag_fn)`**
@@ -216,8 +214,12 @@ log_callback            # Function for logging messages
    - Internal loop running in background thread
    - **Windows/python-can:** Reads via `self.can_bus.recv(timeout=1.0)`
    - **Linux fallback:** Reads from `candump` subprocess output
+   - Emits RX traffic event to `traffic_callback` for each received frame
    - Parses each message via `elabora_frame_can()` in utils
    - Calls `data_callback()` for each successfully parsed message
+
+6. **`set_traffic_callback(callback)`**
+   - Registers callback used by GUI Developer tab to collect CAN TX/RX history
 
 6. **`stop_reader()`**
    - Stops background reading thread
@@ -405,8 +407,8 @@ cutoff_highpass         # High-pass filter cutoff frequency (Hz)
 ### 9.4 Plot Update
 
 - `update_plot()` runs every 300ms (while acquisition active)
-- Reads plot option checkboxes
-- Calls `PlotManager.process_and_plot()`
+- Reads dynamically generated PDO checkboxes
+- Calls `PlotManager.process_and_plot_pdo_signals()` with selected PDO keys
 - Matplotlib canvas automatically redraws
 
 ### 9.5 Stop Acquisition Flow
@@ -421,10 +423,20 @@ cutoff_highpass         # High-pass filter cutoff frequency (Hz)
 
 ### 9.6 CSV Export
 
-CSV file structure:
+CSV file structure is dynamic and includes only curves currently selected in Data tab plot options.
+
+Base columns always present:
 ```csv
-Timestamp,CAN ID,x [g],y [g],z [g],x_incl [g],y_incl [g],z_incl [g],x_acc [g],y_acc [g],z_acc [g],Tetha_XZ [deg],Tetha_YZ [deg]
-2026-02-22 10:30:45.123456,61D,0.123,0.456,9.810,-0.012,0.034,9.805,-0.135,0.422,0.005,0.045
+Timestamp,CAN ID
+```
+
+Optional columns (added only if corresponding PDO checkbox is selected):
+- Signal names discovered from EDS PDO mapping (example: `Acc_x`, `Acc_y`, `Acc_z`, `Vang_x`, `Vang_y`, `Vang_z`)
+
+Example (Acc_x + Acc_y selected):
+```csv
+Timestamp,CAN ID,Acc_x,Acc_y
+2026-02-22 10:30:45.123456,61D,-0.012,0.034
 ...
 ```
 

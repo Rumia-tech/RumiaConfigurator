@@ -2,6 +2,9 @@ import os
 import subprocess
 import threading
 import traceback
+import datetime
+import re
+import time
 
 # Import python-can if available
 try:
@@ -31,6 +34,37 @@ class CanController:
         self.selected_channel = None
         self.selected_backend = None
         self.selected_bitrate = None
+        self.traffic_callback = None
+
+    def set_traffic_callback(self, callback):
+        """Register callback invoked for each TX/RX CAN frame."""
+        self.traffic_callback = callback
+
+    def _notify_traffic(self, direction, can_id, data_string, source):
+        """Emit CAN frame details to traffic callback if configured."""
+        if not self.traffic_callback:
+            return
+        try:
+            self.traffic_callback(
+                {
+                    "timestamp": datetime.datetime.now(),
+                    "direction": direction,
+                    "can_id": can_id.upper(),
+                    "data": data_string.upper(),
+                    "source": source,
+                }
+            )
+        except Exception:
+            pass
+
+    def _parse_can_line(self, line):
+        """Parse candump-style line and return (can_id, data_string) or (None, None)."""
+        match = re.search(r"\b([0-9A-Fa-f]{1,8})\b\s*\[\d+\]\s*([0-9A-Fa-f ]*)", line)
+        if not match:
+            return None, None
+        can_id = match.group(1).upper()
+        data_string = "".join(match.group(2).strip().split()).upper()
+        return can_id, data_string
 
     def list_slcan_ports(self):
         """Return list of available COM ports (potential slcan channels) on Windows using pyserial."""
@@ -49,6 +83,9 @@ class CanController:
         Setup CAN bus using provided params or environment defaults.
         Returns: True if setup succeeded, False otherwise
         """
+        if self.can_bus is not None:
+            self.shutdown()
+
         tty_device = os.environ.get('CAN_TTY_DEVICE', '/dev/ttyACM0')
         can_interface = os.environ.get('CAN_INTERFACE', 'can0')
         can_backend = (backend or os.environ.get('CAN_BACKEND', 'slcan'))
@@ -152,6 +189,7 @@ class CanController:
                 msg = can.Message(arbitration_id=int(can_id, 16), data=data_bytes, is_extended_id=False)
                 self.can_bus.send(msg)
                 self.log_callback(f"CAN message sent (python-can): {can_id}#{data_string}")
+                self._notify_traffic("TX", f"{int(can_id, 16):03X}", data_string, "python-can")
                 return True
             except Exception as e:
                 self.log_callback(f"Error sending CAN (python-can): {e}")
@@ -167,6 +205,7 @@ class CanController:
                     self.log_callback(f"cansend STDERR: {process_cansend.stderr.strip()}")
                 process_cansend.check_returncode()
                 self.log_callback(f"CAN message sent: {can_interface} {can_id}#{data_string}")
+                self._notify_traffic("TX", f"{int(can_id, 16):03X}", data_string, "cansend")
                 return True
             except subprocess.CalledProcessError as e:
                 self.log_callback(f"Error sending CAN message: {e}")
@@ -178,6 +217,39 @@ class CanController:
             except FileNotFoundError:
                 self.log_callback("Error: cansend not found. Ensure can-utils is installed and cansend is in PATH.")
                 return False
+
+    def probe_bitrate(self, backend, channel, candidates, per_bitrate_timeout=0.8):
+        """Probe bitrates and return the first one with incoming traffic, else None."""
+        if can is None:
+            self.log_callback("Bitrate detection unavailable: python-can not installed.")
+            return None
+
+        for bitrate in candidates:
+            try:
+                self.shutdown()
+                ok = self.setup_bus(backend=backend, channel=channel, bitrate=bitrate)
+                if not ok or self.can_bus is None:
+                    continue
+
+                deadline = time.monotonic() + per_bitrate_timeout
+                received = False
+                while time.monotonic() < deadline:
+                    remaining = max(0.01, deadline - time.monotonic())
+                    msg = self.can_bus.recv(timeout=min(0.2, remaining))
+                    if msg is not None:
+                        received = True
+                        break
+
+                if received:
+                    self.log_callback(f"Bitrate detected: {bitrate}")
+                    self.shutdown()
+                    return bitrate
+            except Exception as e:
+                self.log_callback(f"Bitrate probe error ({bitrate}): {e}")
+            finally:
+                self.shutdown()
+
+        return None
 
     def start_reader(self, data_callback, stop_flag_fn):
         """
@@ -209,6 +281,7 @@ class CanController:
                     try:
                         hex_bytes = ' '.join(f"{b:02X}" for b in msg.data)
                         line = f"can0 {msg.arbitration_id:X} [{len(msg.data)}] {hex_bytes}"
+                        self._notify_traffic("RX", f"{msg.arbitration_id:03X}", ''.join(f"{b:02X}" for b in msg.data), "python-can")
                         timestamp, can_id, x, y, z = elabora_frame_can(line)
                         if timestamp:
                             data_callback(timestamp, can_id, x, y, z)
@@ -227,6 +300,9 @@ class CanController:
                             break
                         line = line.strip()
                         if line:
+                            can_id_rx, data_rx = self._parse_can_line(line)
+                            if can_id_rx is not None:
+                                self._notify_traffic("RX", can_id_rx, data_rx, "candump")
                             timestamp, can_id, x, y, z = elabora_frame_can(line)
                             if timestamp:
                                 data_callback(timestamp, can_id, x, y, z)
@@ -265,3 +341,6 @@ class CanController:
                 self.log_callback("CAN bus closed.")
             except Exception as e:
                 self.log_callback(f"Error closing CAN bus: {e}")
+        self.can_bus = None
+        self.can_process = None
+        self.reader_thread = None
