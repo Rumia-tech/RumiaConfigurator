@@ -16,11 +16,6 @@ dist/
 .eggs/
 pip-wheel-metadata/
 
-# PyInstaller (keep .spec tracked if you want to version it)
-# exclude created executables and build artifacts
-dist/
-build/
-
 # IDEs and editors
 .vscode/
 .idea/
@@ -34,6 +29,14 @@ Thumbs.db
 .coverage.*
 htmlcov/
 .pytest_cache/
+
+# Tool caches
+.ruff_cache/
+.mypy_cache/
+
+
+# Claude Code local settings
+.claude/settings.local.json
 
 # Logs, DBs, secrets
 *.log
