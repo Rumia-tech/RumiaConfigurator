@@ -26,7 +26,7 @@ from rumia_configurator.gui.theme.tokens import METRICS
 ButtonVariant = Literal["primary", "secondary"]
 ButtonSize = Literal["large", "normal", "bar", "compact"]
 CalloutKind = Literal["info", "warning", "error"]
-LedState = Literal["operational", "preop", "stopped", "absent"]
+LedState = Literal["operational", "preop", "stopped", "absent", "error"]
 
 
 def refresh_style(widget: QWidget) -> None:
@@ -84,6 +84,7 @@ class SectionLabel(QLabel):
         self.setFont(section_label_font())
 
     def setText(self, text: str) -> None:  # noqa: N802 (Qt API)
+        """Set the text, always in upper case."""
         super().setText(text.upper())
 
 
@@ -184,9 +185,11 @@ class StatusLed(QWidget):
 
     @property
     def state(self) -> str:
+        """Current state name (``operational``, ``preop``, ``stopped``, ``absent``, ``error``)."""
         return str(self.dot.property("state"))
 
     def set_state(self, state: LedState, text: str) -> None:
+        """Change color and text together: the state is never shown by color alone."""
         self.dot.setProperty("state", state)
         self.dot.setAccessibleName(text)
         self.label.setText(text)
@@ -217,4 +220,5 @@ class ValueTile(QFrame):
         layout.addLayout(row)
 
     def set_value(self, value: str) -> None:
+        """Show a new value; the unit does not change."""
         self.value_label.setText(value)

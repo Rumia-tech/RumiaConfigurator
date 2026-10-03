@@ -80,6 +80,7 @@ class LanguageManager(QObject):
         self._translators = []
 
     def _install_app_catalog(self, language: str) -> None:
+        """Install the application catalog; if it is missing, log it and keep English."""
         resource = files("rumia_configurator.gui") / "translations" / f"{CATALOG}_{language}.qm"
         translator = QTranslator(self)
         with as_file(resource) as path:

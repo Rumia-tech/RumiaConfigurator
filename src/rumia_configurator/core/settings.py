@@ -94,6 +94,7 @@ def _check_value(name: str, value: Any, default: Any, warnings: list[str]) -> An
 
 
 def _connection_from_dict(data: dict[str, Any], warnings: list[str]) -> ConnectionSettings:
+    """Build :class:`ConnectionSettings` from the ``connection`` JSON object."""
     defaults = ConnectionSettings()
     known = [f.name for f in fields(ConnectionSettings)]
     for key in sorted(data.keys() - set(known)):

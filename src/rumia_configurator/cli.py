@@ -31,6 +31,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="open a window showing the brand components in the light and dark themes",
     )
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="demo mode: a virtual CAN bus with a simulated Smart IMU and INCLI Sense",
+    )
     commands = parser.add_subparsers(dest="command", metavar="COMMAND")
     export = commands.add_parser(
         "export-logs",
@@ -45,7 +50,29 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="destination ZIP file (default: a timestamped file in the current folder)",
     )
+    commands.add_parser(
+        "adapters",
+        help="list the CAN adapters found on this computer",
+        description="List the serial ports (SLCAN adapters, Rumia first) and, on Linux, "
+        "the SocketCAN interfaces. PEAK, Kvaser, IXXAT and candleLight adapters are not "
+        "probed: choose them in the application with Other adapter.",
+    )
     return parser
+
+
+def _list_adapters() -> int:
+    """Print the adapters found, one per line; return the exit code."""
+    from rumia_configurator.core.connection import list_adapters
+
+    adapters = list_adapters()
+    if not adapters:
+        print("No adapter found. Plug the adapter in and run the command again.")
+        return 0
+    for adapter in adapters:
+        usb = f"  USB {adapter.usb_id}" if adapter.usb_id else ""
+        columns = f"{adapter.kind:<9} {adapter.backend:<9} {adapter.channel:<14}"
+        print(f"{columns} {adapter.description}{usb}")
+    return 0
 
 
 def _setup_logging() -> None:
@@ -63,6 +90,7 @@ def _setup_logging() -> None:
 
 
 def _export_logs(output: Path | None) -> int:
+    """Write the log archive for the ``export-logs`` command; return the exit code."""
     dest = output if output is not None else Path.cwd() / app_log.default_export_name()
     try:
         app_log.export_logs(paths.log_dir(), paths.settings_path(), dest)
@@ -85,6 +113,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "export-logs":
         return _export_logs(args.output)
+    if args.command == "adapters":
+        return _list_adapters()
 
     if args.theme_demo:
         # Imported here so that the other commands start without loading Qt.
@@ -94,4 +124,4 @@ def main(argv: list[str] | None = None) -> int:
 
     from rumia_configurator.gui.app import run_gui
 
-    return run_gui()
+    return run_gui(demo=args.demo)

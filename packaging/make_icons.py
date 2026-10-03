@@ -96,6 +96,7 @@ def make_logos() -> tuple[Image.Image, Image.Image]:
 
 
 def main() -> None:
+    """Generate every icon and logo and print what was written."""
     _app = QGuiApplication([])
     master = render_master()
     OUT_DIR.mkdir(parents=True, exist_ok=True)

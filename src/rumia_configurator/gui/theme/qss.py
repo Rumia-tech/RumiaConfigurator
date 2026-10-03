@@ -174,6 +174,16 @@ QFrame[role="card"] {{
     border-radius: {m.radius_card}px;
 }}
 QFrame[role="panel"] {{ background-color: {p.surface}; border: none; }}
+QFrame[role="panel"] QScrollArea,
+QWidget[role="node-list"] {{ background: transparent; border: none; }}
+QFrame[role="node-row"] {{
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: {m.radius_button}px;
+}}
+QFrame[role="node-row"]:hover {{ background-color: {p.bg}; }}
+QFrame[role="node-row"][selected="true"] {{ background-color: {p.bg}; border-color: {p.link}; }}
+QFrame[role="node-row"]:focus {{ border-color: {p.link}; }}
 QFrame[role="tile"] {{
     background-color: {p.surface};
     border: none;
@@ -202,6 +212,10 @@ QFrame[role="statusbar"] QLabel[muted="true"] {{ color: {p.statusbar_muted}; }}
 QFrame[role="statusbar"] QLabel[role="led"][state="stopped"] {{
     background-color: {p.on_statusbar};
 }}
+QFrame[role="statusbar"] QLabel[role="led"][state="error"] {{
+    background-color: {p.statusbar_error};
+}}
+QFrame[role="statusbar"] QLabel[error="true"] {{ color: {p.statusbar_error}; }}
 
 /* ---------- Text ---------- */
 QLabel {{ background: transparent; }}
@@ -251,6 +265,7 @@ QLabel[role="led"][state="operational"] {{ background-color: {p.link}; }}
 QLabel[role="led"][state="preop"] {{ background-color: {p.accent}; }}
 QLabel[role="led"][state="stopped"] {{ background-color: {p.text}; }}
 QLabel[role="led"][state="absent"] {{ background-color: {p.error}; }}
+QLabel[role="led"][state="error"] {{ background-color: {p.error}; }}
 
 /* ---------- Misc ---------- */
 QToolTip {{

@@ -425,6 +425,7 @@ def run_theme_demo() -> int:
         )
 
     def save_mode(mode: str) -> None:
+        """Store the chosen theme in the user settings."""
         settings.theme = mode
         try:
             store.save(settings)

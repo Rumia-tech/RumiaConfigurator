@@ -20,6 +20,12 @@ uv run rumia-configurator --version
 uv run pytest                    # run the tests
 ```
 
+## Developer guide
+
+How the code is organised, how to change it and the rules it follows are
+explained in [docs/development/](docs/development/README.md). Start there
+before changing the code.
+
 ## Translations
 
 The interface is in Italian and English. Source strings are English and pass
@@ -39,6 +45,7 @@ src/rumia_configurator/   application package
   profiles/               product profiles and EDS files
   gui/                    PySide6 user interface
   cli.py                  command-line entry point
+docs/development/         developer guide
 tests/                    automated tests
 scripts/                  developer tools (translations)
 packaging/                icons and build files

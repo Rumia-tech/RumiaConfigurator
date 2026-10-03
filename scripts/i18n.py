@@ -39,14 +39,17 @@ def tool(name: str) -> str:
 
 
 def sources() -> list[Path]:
+    """Python files scanned for ``tr()`` texts."""
     return sorted(p for p in GUI.rglob("*.py") if p not in EXCLUDED)
 
 
 def ts_path(language: str, folder: Path = TRANSLATIONS) -> Path:
+    """Path of the ``.ts`` file of ``language`` inside ``folder``."""
     return folder / f"{CATALOG}_{language}.ts"
 
 
 def update(folder: Path = TRANSLATIONS) -> None:
+    """Add new texts to the ``.ts`` files and drop the ones no longer in the code."""
     folder.mkdir(parents=True, exist_ok=True)
     targets = [str(ts_path(lang, folder)) for lang in LANGUAGES]
     command = [tool("pyside6-lupdate"), *map(str, sources()), "-no-obsolete", "-locations", "none"]
@@ -54,6 +57,7 @@ def update(folder: Path = TRANSLATIONS) -> None:
 
 
 def compile_qm(folder: Path = TRANSLATIONS, out: Path = TRANSLATIONS) -> None:
+    """Build the ``.qm`` files from the ``.ts`` files in ``folder`` into ``out``."""
     for language in LANGUAGES:
         qm = out / f"{CATALOG}_{language}.qm"
         command = [tool("pyside6-lrelease"), str(ts_path(language, folder)), "-qm", str(qm)]
@@ -83,6 +87,7 @@ def _text(path: Path) -> str:
 
 
 def check() -> int:
+    """Report out-of-date or untranslated catalogs; return the exit code."""
     problems: list[str] = []
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
@@ -110,6 +115,7 @@ def check() -> int:
 
 
 def main(argv: list[str]) -> int:
+    """Run one command and return the exit code."""
     if argv == ["update"]:
         update()
         return 0

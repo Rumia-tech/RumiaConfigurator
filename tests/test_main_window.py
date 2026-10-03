@@ -13,6 +13,7 @@ from pytestqt.qtbot import QtBot
 
 from rumia_configurator.core import paths
 from rumia_configurator.core.settings import Settings, SettingsStore
+from rumia_configurator.gui.connection import ConnectionController
 from rumia_configurator.gui.i18n import LanguageManager, resolve_language
 from rumia_configurator.gui.main_window import MainWindow
 from rumia_configurator.gui.theme import manager as theme_module
@@ -39,7 +40,15 @@ def make_window(
 ) -> MainWindow:
     theme_manager, language_manager = managers
     store = SettingsStore(paths.settings_path())
-    window = MainWindow(store, settings or store.load().settings, theme_manager, language_manager)
+    # No adapters: the tests must not depend on the serial ports of the machine.
+    controller = ConnectionController(lister=lambda: [])
+    window = MainWindow(
+        store,
+        settings or store.load().settings,
+        theme_manager,
+        language_manager,
+        connection=controller,
+    )
     qtbot.addWidget(window)
     return window
 
@@ -154,12 +163,13 @@ def test_disabled_controls_until_connected(
 ) -> None:
     window = make_window(qtbot, managers)
     for button in (
-        window.top_bar.connect_button,
-        window.top_bar.adapter,
+        window.top_bar.connect_button,  # no adapter chosen yet
         window.node_panel.scan_button,
         window.node_panel.reset_button,
     ):
         assert not button.isEnabled()
+    assert window.top_bar.adapter.isEnabled()  # its menu lists the adapters
+    assert window.top_bar.bitrate.isEnabled()
     assert window.top_bar.connection.state == "stopped"
 
 

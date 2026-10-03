@@ -79,6 +79,8 @@ def build_palette(p: Palette) -> QPalette:
 
 @dataclass
 class _IconBinding:
+    """An icon to repaint on every theme change."""
+
     target: QAbstractButton | QLabel
     name: str
     role: str
@@ -103,10 +105,12 @@ class ThemeManager(QObject):
 
     @property
     def mode(self) -> str:
+        """The user's choice: ``"system"``, ``"light"`` or ``"dark"``."""
         return self._mode
 
     @property
     def theme(self) -> Theme:
+        """The theme in use, with ``"system"`` already resolved."""
         return self._theme
 
     def set_mode(self, mode: str) -> None:
@@ -130,6 +134,7 @@ class ThemeManager(QObject):
         self._paint_icon(binding)
 
     def _resolve(self) -> ThemeName:
+        """Concrete theme for the current mode."""
         if self._mode == "light":
             return ThemeName.LIGHT
         if self._mode == "dark":
@@ -138,6 +143,7 @@ class ThemeManager(QObject):
         return ThemeName.DARK if scheme == Qt.ColorScheme.Dark else ThemeName.LIGHT
 
     def _apply(self, name: ThemeName) -> None:
+        """Apply ``name`` to the whole application and notify the listeners."""
         self._theme = THEMES[name]
         self._app.setPalette(build_palette(self._theme.palette))
         self._app.setStyleSheet(build_stylesheet(self._theme, self._style_images()))
@@ -159,6 +165,7 @@ class ThemeManager(QObject):
         return paths
 
     def _paint_icon(self, binding: _IconBinding) -> None:
+        """Render one bound icon in the current theme."""
         color = self.color(binding.role)
         if isinstance(binding.target, QLabel):
             ratio = binding.target.devicePixelRatioF()
@@ -167,6 +174,7 @@ class ThemeManager(QObject):
             binding.target.setIcon(icon(binding.name, color, binding.size))
 
     def _on_system_scheme_changed(self, _scheme: Qt.ColorScheme) -> None:
+        """Follow the operating system when the mode is ``"system"``."""
         if self._mode == "system":
             self._apply(self._resolve())
 
@@ -196,5 +204,6 @@ def theme_manager() -> ThemeManager:
 
 
 def _reset_for_tests() -> None:
+    """Forget the installed manager (tests create a new one each time)."""
     global _manager
     _manager = None

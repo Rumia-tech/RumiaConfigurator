@@ -42,6 +42,7 @@ class Palette:
     statusbar: str
     on_statusbar: str
     statusbar_muted: str  # secondary text in the status bar
+    statusbar_error: str  # error LED and error text in the status bar, which is always dark
     tooltip: str
     on_tooltip: str
 
@@ -72,6 +73,7 @@ LIGHT = Palette(
     statusbar="#0B2326",
     on_statusbar="#FFFFFF",
     statusbar_muted="#68B3B3",
+    statusbar_error="#FF8A80",
     tooltip="#0B2326",
     on_tooltip="#FFFFFF",
 )
@@ -98,6 +100,7 @@ DARK = Palette(
     statusbar="#061719",
     on_statusbar="#FFFFFF",
     statusbar_muted="#68B3B3",
+    statusbar_error="#FF8A80",
     tooltip="#12333A",
     on_tooltip="#FFFFFF",
 )
@@ -224,6 +227,7 @@ TEXT_PAIRS: tuple[ContrastPair, ...] = (
     ContrastPair("ink", "error_bg", TEXT_MIN, "EMCY row"),
     ContrastPair("on_statusbar", "statusbar", TEXT_MIN, "status bar"),
     ContrastPair("statusbar_muted", "statusbar", TEXT_MIN, "status bar, last event"),
+    ContrastPair("statusbar_error", "statusbar", TEXT_MIN, "status bar, bus-off and lost adapter"),
     ContrastPair("on_tooltip", "tooltip", TEXT_MIN, "tooltips"),
 )
 
@@ -243,6 +247,8 @@ GRAPHIC_PAIRS: tuple[ContrastPair, ...] = (
     ContrastPair("error", "surface", GRAPHIC_MIN, "LED Absent in panels"),
     ContrastPair("link", "statusbar", GRAPHIC_MIN, "bus LED in the status bar"),
     ContrastPair("on_statusbar", "statusbar", GRAPHIC_MIN, "bus LED 'not connected'"),
+    ContrastPair("statusbar_error", "statusbar", GRAPHIC_MIN, "bus LED error"),
+    ContrastPair("accent", "statusbar", GRAPHIC_MIN, "bus LED 'connecting'"),
     ContrastPair("accent", "bg", GRAPHIC_MIN, "LED Pre-op", _LED_WAIVER),
     ContrastPair("accent", "surface", GRAPHIC_MIN, "LED Pre-op in panels", _LED_WAIVER),
 )
