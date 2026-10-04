@@ -9,12 +9,14 @@ from __future__ import annotations
 
 from typing import Literal
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -45,7 +47,16 @@ def make_button(
     parent: QWidget | None = None,
 ) -> QPushButton:
     """Push button: primary is Deep Teal, secondary white with a Line border."""
-    button = QPushButton(text, parent)
+    return style_button(QPushButton(text, parent), variant, size, icon)
+
+
+def style_button(
+    button: QPushButton,
+    variant: ButtonVariant = "secondary",
+    size: ButtonSize = "normal",
+    icon: str | None = None,
+) -> QPushButton:
+    """Give ``button`` (also a subclass) the look of :func:`make_button`."""
     button.setProperty("variant", variant)
     if size != "normal":
         button.setProperty("buttonSize", size)
@@ -73,6 +84,69 @@ def make_label(text: str, role: str | None = None, parent: QWidget | None = None
     if role is not None:
         label.setProperty("role", role)
     return label
+
+
+class ElidedButton(QPushButton):
+    """Button whose text is elided in the middle only when the layout gives it less room.
+
+    The text takes up to ``max_text_width`` px and never asks for more than
+    ``min_text_width`` px in ``minimumSizeHint()``, so a long name never makes the
+    window wider. When the text is elided, the tooltip shows it whole.
+    """
+
+    def __init__(
+        self, min_text_width: int, max_text_width: int, parent: QWidget | None = None
+    ) -> None:
+        super().__init__(parent)
+        self._min_text_width = min_text_width
+        self._max_text_width = max_text_width
+        self._full_text = ""
+        self._tooltip = ""
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, self.sizePolicy().verticalPolicy())
+
+    def full_text(self) -> str:
+        """The text before eliding."""
+        return self._full_text
+
+    def set_full_text(self, text: str, tooltip: str = "") -> None:
+        """Show ``text``; ``tooltip`` is used while the text is shown whole."""
+        self._full_text = text
+        self._tooltip = tooltip
+        self._fit(self._max_text_width)
+        self.updateGeometry()
+
+    def sizeHint(self) -> QSize:  # noqa: N802 (Qt API)
+        return self._hint(self._max_text_width)
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 (Qt API)
+        return self._hint(self._min_text_width)
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 (Qt API)
+        super().resizeEvent(event)
+        self._fit(min(self._max_text_width, max(0, self.width() - self._padding())))
+
+    def _padding(self) -> int:
+        """Width of everything but the text: margins, border, icon, menu arrow."""
+        shown = self.fontMetrics().horizontalAdvance(self.text())
+        return super().sizeHint().width() - shown
+
+    def _hint(self, text_width: int) -> QSize:
+        size = super().sizeHint()
+        full = self.fontMetrics().horizontalAdvance(self._full_text)
+        size.setWidth(self._padding() + min(full, text_width))
+        return size
+
+    def _fit(self, text_width: int) -> None:
+        metrics = self.fontMetrics()
+        if metrics.horizontalAdvance(self._full_text) <= text_width:
+            # elidedText() measures fractional widths (Linux, macOS): a text that fits
+            # the rounded width of sizeHint() would lose a character.
+            shown = self._full_text
+        else:
+            shown = metrics.elidedText(self._full_text, Qt.TextElideMode.ElideMiddle, text_width)
+        if shown != self.text():
+            self.setText(shown)
+        self.setToolTip(self._full_text if shown != self._full_text else self._tooltip)
 
 
 class SectionLabel(QLabel):

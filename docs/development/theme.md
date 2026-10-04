@@ -263,6 +263,8 @@ style sheet roles. Callers pass texts that are already translated.
 | Component | What it is |
 | --- | --- |
 | `make_button(text, variant, size, icon)` | push button; `variant` `"primary"` or `"secondary"`, `size` `"large"`, `"normal"`, `"bar"`, `"compact"` (UI-CMP-01) |
+| `style_button(button, variant, size, icon)` | gives a `QPushButton` subclass the look of `make_button()` |
+| `ElidedButton(min_text_width, max_text_width)` | button whose text is elided in the middle only when the layout gives it less room; `set_full_text(text, tooltip)`; when elided, the tooltip shows the whole text. Used for the adapter name in the top bar |
 | `make_link(text, on_surface)` | button that looks like a link; ink and underlined on surface |
 | `make_label(text, role)` | label with a style sheet role |
 | `SectionLabel(text)` | uppercase mono label above a group of fields; `setText()` keeps it uppercase |

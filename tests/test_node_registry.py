@@ -79,17 +79,18 @@ def test_missing_heartbeat_raises_and_clears_the_alarm(
 ) -> None:
     """Acceptance of FR-NET-05: alarm after 1.5 x 0x1017, cleared when it comes back."""
     sim = simulator.node(29)
-    sim.store(0x1017, 0, 100)
+    # 200 ms: the 100 ms of slack before the alarm also hold on a slow CI runner.
+    sim.store(0x1017, 0, 200)
     assert wait_until(lambda: 29 in ids(registry))
-    assert registry.read_identity(29).heartbeat_ms == 100
-    time.sleep(0.12)
+    assert registry.read_identity(29).heartbeat_ms == 200
+    time.sleep(0.22)
     assert registry.check_heartbeats() == []
 
     sim.stop_heartbeat()
-    time.sleep(0.3)  # more than 1.5 x 100 ms
+    time.sleep(0.5)  # more than 1.5 x 200 ms
     assert registry.check_heartbeats() == [(29, True)]
     assert node(registry, 29).heartbeat_missing
-    assert node(registry, 29).silent_for >= 0.15
+    assert node(registry, 29).silent_for >= 0.3
     assert registry.check_heartbeats() == []  # reported once
 
     sim.resume_heartbeat()

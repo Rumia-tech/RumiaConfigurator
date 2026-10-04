@@ -118,11 +118,16 @@ def test_status_bar_shows_frames_and_load(
     )
     qtbot.addWidget(window)
     published: list[TrafficStats] = []
+    profiles: list[dict[int, object]] = [{}]
     window.live.stats_updated.connect(published.append)
+    window.network.profiles_changed.connect(profiles.append)
     window.start_demo_connection(sim_channel)
     qtbot.waitUntil(lambda: window.live.running, timeout=3000)
-    # Wait for a full one-second window after the connection.
-    qtbot.waitUntil(lambda: len(published) >= 4, timeout=4000)
+    # The identity reads of the two nodes are a burst of SDO frames: wait until they
+    # are done, then for a full one-second window (statistics every 500 ms) after them.
+    qtbot.waitUntil(lambda: set(profiles[-1]) == {10, 29}, timeout=5000)
+    after_identities = len(published)
+    qtbot.waitUntil(lambda: len(published) >= after_identities + 3, timeout=4000)
     last = published[-1]
     # Smart IMU 2 TPDOs every 500 ms, INCLI Sense 10 per second, two heartbeats: about
     # 16 frames/s. The exact count is tested in test_traffic_stats and test_traffic_load;

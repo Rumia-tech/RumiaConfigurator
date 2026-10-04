@@ -172,9 +172,13 @@ Methods to show the current state: `set_mode()`, `set_language(setting,
 language)` (checks the menu item and writes `IT` or `EN` on the button),
 `set_theme_mode()`, `set_adapters()`, `set_selection()`, `set_bitrate()`,
 `set_connection_state()` and `set_demo()`. `adapter_text()` gives the short
-name of an adapter ("Rumia USB-CAN · COM5"); names longer than 170 px are
-elided in the middle and shown whole in the tooltip, so the bar still fits at
-1366 px.
+name of an adapter ("Rumia USB-CAN · COM5"). The adapter button is an
+`ElidedButton` (`gui/widgets/brand.py`): the name takes up to
+`ADAPTER_TEXT_WIDTH` (220 px) and is elided in the middle only when the window
+is narrower; in `minimumSizeHint()` it counts as `ADAPTER_MIN_TEXT_WIDTH`
+(110 px), so a long name never makes the window wider than 1366 px, also with
+the wider macOS fonts. When the name is elided, the tooltip shows it whole.
+`style_button()` gives a `QPushButton` subclass the look of `make_button()`.
 
 The logo has two versions, `gui/assets/logo_light.png` and `logo_dark.png`
 (white wordmark). The top bar listens to `ThemeManager.changed` and swaps the

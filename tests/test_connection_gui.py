@@ -213,6 +213,20 @@ def test_top_bar_still_fits_when_connected_with_a_long_name(
     assert "/dev/serial/by-id" in window.top_bar.adapter.toolTip()
 
 
+@pytest.mark.parametrize("language", ["it", "en"])
+def test_usual_adapter_name_is_whole_at_1366(
+    qtbot: QtBot, managers: tuple[ThemeManager, LanguageManager], language: str
+) -> None:
+    window = make_window(qtbot, managers, adapters=[RUMIA, OTHER])
+    window.set_language(language)
+    qtbot.waitUntil(lambda: window.top_bar.connect_button.isEnabled(), timeout=3000)
+    window.resize(1366, 768)
+    window.show()
+    for _ in range(3):
+        QApplication.processEvents()
+    assert window.top_bar.adapter.text() == "Rumia USB-CAN · COM5"  # UI-LAY-06
+
+
 @pytest.mark.parametrize("kind", list(ErrorKind))
 def test_every_error_has_three_parts(kind: ErrorKind) -> None:
     failure = ConnectionFailure(kind, "pcan", "PCAN_USBBUS1", "detail text")

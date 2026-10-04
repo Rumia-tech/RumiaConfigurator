@@ -5,7 +5,7 @@ from __future__ import annotations
 from importlib.resources import files
 
 from PySide6.QtCore import QEvent, Qt, Signal, SignalInstance
-from PySide6.QtGui import QAction, QActionGroup, QFontMetrics, QPixmap
+from PySide6.QtGui import QAction, QActionGroup, QPixmap
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -20,10 +20,20 @@ from rumia_configurator.gui.i18n import LANGUAGE_NAMES, LANGUAGES
 from rumia_configurator.gui.theme.fonts import mono_font
 from rumia_configurator.gui.theme.manager import ThemeManager
 from rumia_configurator.gui.theme.tokens import METRICS, Theme
-from rumia_configurator.gui.widgets.brand import SectionLabel, StatusLed, make_button, make_label
+from rumia_configurator.gui.widgets.brand import (
+    ElidedButton,
+    SectionLabel,
+    StatusLed,
+    make_button,
+    make_label,
+    style_button,
+)
 
 LOGO_HEIGHT = 22
-ADAPTER_TEXT_WIDTH = 170  # longer adapter names are elided; the full name is in the tooltip
+# The adapter name takes up to ADAPTER_TEXT_WIDTH px and is elided in the middle when the
+# window is narrower; it never makes the window wider than ADAPTER_MIN_TEXT_WIDTH would.
+ADAPTER_TEXT_WIDTH = 220
+ADAPTER_MIN_TEXT_WIDTH = 110
 
 
 def format_bitrate(bitrate: int) -> str:
@@ -81,7 +91,8 @@ class TopBar(QFrame):
 
         self.adapter_label = SectionLabel("", self)
         layout.addWidget(self.adapter_label)
-        self.adapter = make_button("", size="bar", icon="chevron-down", parent=self)
+        self.adapter = ElidedButton(ADAPTER_MIN_TEXT_WIDTH, ADAPTER_TEXT_WIDTH, self)
+        style_button(self.adapter, size="bar", icon="chevron-down")
         self.adapter_menu = QMenu(self)
         self.adapter_actions = QActionGroup(self)
         self.refresh_action = QAction(self)
@@ -270,11 +281,7 @@ class TopBar(QFrame):
             text = self._selection_text
         else:
             text = self.tr("No adapter")
-        shown = QFontMetrics(self.adapter.font()).elidedText(
-            text, Qt.TextElideMode.ElideMiddle, ADAPTER_TEXT_WIDTH
-        )
-        self.adapter.setText(shown)
-        self.adapter.setToolTip(text if shown != text else self.tr("Choose the USB-CAN adapter"))
+        self.adapter.set_full_text(text, self.tr("Choose the USB-CAN adapter"))
         self.adapter.setEnabled(idle and not self._demo)
         self.bitrate.setEnabled(idle and not self._demo)
         if state == ConnectionState.CONNECTED:

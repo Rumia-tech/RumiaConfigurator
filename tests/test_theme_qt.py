@@ -18,7 +18,7 @@ from rumia_configurator.gui.theme.manager import ThemeManager, install_theme
 from rumia_configurator.gui.theme.qss import STYLE_IMAGES, build_stylesheet
 from rumia_configurator.gui.theme.tokens import METRICS, THEMES, ThemeName
 from rumia_configurator.gui.theme_demo import ThemeDemoWindow
-from rumia_configurator.gui.widgets.brand import StatusLed, make_button
+from rumia_configurator.gui.widgets.brand import ElidedButton, StatusLed, make_button, style_button
 
 GUI_DIR = Path(__file__).resolve().parents[1] / "src" / "rumia_configurator" / "gui"
 HEX = re.compile(r"#[0-9A-Fa-f]{6}\b")
@@ -128,6 +128,31 @@ def test_button_heights_follow_the_tokens(manager: ThemeManager, qtbot: QtBot) -
         qtbot.addWidget(button)
         button.show()
         assert button.height() == height, size
+
+
+def test_elided_button_shortens_only_when_narrow(manager: ThemeManager, qtbot: QtBot) -> None:
+    button = ElidedButton(60, 300)
+    style_button(button, size="bar", icon="chevron-down")
+    qtbot.addWidget(button)
+    name = "Rumia USB-CAN · /dev/serial/by-id/usb-Rumia_CAN_Interface_0123456789"
+    button.set_full_text(name, "Choose")
+    # The minimum never depends on the length of the name: the window does not grow.
+    assert button.minimumSizeHint().width() < button.sizeHint().width()
+    button.set_full_text("x" * 200, "Choose")
+    minimum = button.minimumSizeHint().width()
+    button.set_full_text(name, "Choose")
+    assert button.minimumSizeHint().width() == minimum
+    button.show()
+    button.resize(button.sizeHint().width() + 200, button.height())
+    assert button.fontMetrics().horizontalAdvance(button.text()) <= 300
+    button.resize(minimum, button.height())
+    assert "…" in button.text() and button.text() != name
+    assert button.toolTip() == name
+    button.set_full_text("CANable · COM5", "Choose")
+    button.resize(button.sizeHint().width(), button.height())
+    assert button.text() == "CANable · COM5"
+    assert button.toolTip() == "Choose"
+    assert button.full_text() == "CANable · COM5"
 
 
 def test_mode_switch_changes_theme_without_restart(
